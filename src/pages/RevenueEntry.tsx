@@ -69,18 +69,28 @@ export function RevenueEntry() {
     const fetchEstablishments = async () => {
       if (!userProfile) return;
       try {
-        let estQuery;
+        let estData: Establishment[] = [];
+        
         if (userProfile.role === 'admin') {
-          estQuery = query(collection(db, 'establishments'));
+          const estQuery = query(collection(db, 'establishments'));
+          const estSnap = await getDocs(estQuery);
+          estData = estSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
         } else {
-          estQuery = query(
-            collection(db, 'establishments'), 
-            where('__name__', 'in', userProfile.establishmentIds.length ? userProfile.establishmentIds : ['none'])
-          );
+          const createdQuery = query(collection(db, 'establishments'), where('createdBy', '==', userProfile.uid));
+          const createdSnap = await getDocs(createdQuery);
+          const createdData = createdSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
+          
+          let assignedData: Establishment[] = [];
+          if (userProfile.establishmentIds && userProfile.establishmentIds.length > 0) {
+            const assignedQuery = query(collection(db, 'establishments'), where('__name__', 'in', userProfile.establishmentIds));
+            const assignedSnap = await getDocs(assignedQuery);
+            assignedData = assignedSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
+          }
+          
+          const allData = [...createdData, ...assignedData];
+          estData = Array.from(new Map(allData.map(item => [item.id, item])).values());
         }
         
-        const estSnap = await getDocs(estQuery);
-        const estData = estSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
         setEstablishments(estData);
         if (estData.length > 0) {
           setSelectedEst(estData[0].id);

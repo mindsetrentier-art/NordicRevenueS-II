@@ -69,18 +69,28 @@ export function Dashboard() {
       setLoading(true);
       try {
         // Fetch establishments
-        let estQuery;
+        let estData: Establishment[] = [];
+        
         if (userProfile.role === 'admin') {
-          estQuery = query(collection(db, 'establishments'));
+          const estQuery = query(collection(db, 'establishments'));
+          const estSnap = await getDocs(estQuery);
+          estData = estSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
         } else {
-          estQuery = query(
-            collection(db, 'establishments'), 
-            where('__name__', 'in', userProfile.establishmentIds.length ? userProfile.establishmentIds : ['none'])
-          );
+          const createdQuery = query(collection(db, 'establishments'), where('createdBy', '==', userProfile.uid));
+          const createdSnap = await getDocs(createdQuery);
+          const createdData = createdSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
+          
+          let assignedData: Establishment[] = [];
+          if (userProfile.establishmentIds && userProfile.establishmentIds.length > 0) {
+            const assignedQuery = query(collection(db, 'establishments'), where('__name__', 'in', userProfile.establishmentIds));
+            const assignedSnap = await getDocs(assignedQuery);
+            assignedData = assignedSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
+          }
+          
+          const allData = [...createdData, ...assignedData];
+          estData = Array.from(new Map(allData.map(item => [item.id, item])).values());
         }
         
-        const estSnap = await getDocs(estQuery);
-        const estData = estSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
         setEstablishments(estData);
 
         // Fetch revenues for the selected date range and previous period
@@ -103,8 +113,9 @@ export function Dashboard() {
           revData = allData.filter(r => r.date >= startDate && r.date <= endDate);
           prevRevData = allData.filter(r => r.date >= prevStartDate && r.date <= prevEndDate);
         } else {
-          if (userProfile.establishmentIds.length > 0) {
-            const promises = userProfile.establishmentIds.map(id => 
+          const estIds = estData.map(e => e.id);
+          if (estIds.length > 0) {
+            const promises = estIds.map(id => 
               getDocs(query(collection(db, 'revenues'), where('establishmentId', '==', id)))
             );
             const snaps = await Promise.all(promises);

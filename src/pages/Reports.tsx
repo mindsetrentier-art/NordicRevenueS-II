@@ -46,18 +46,28 @@ export function Reports() {
     const fetchEstablishments = async () => {
       if (!userProfile) return;
       try {
-        let estQuery;
+        let estData: Establishment[] = [];
+        
         if (userProfile.role === 'admin') {
-          estQuery = query(collection(db, 'establishments'));
+          const estQuery = query(collection(db, 'establishments'));
+          const estSnap = await getDocs(estQuery);
+          estData = estSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
         } else {
-          estQuery = query(
-            collection(db, 'establishments'), 
-            where('__name__', 'in', userProfile.establishmentIds.length ? userProfile.establishmentIds : ['none'])
-          );
+          const createdQuery = query(collection(db, 'establishments'), where('createdBy', '==', userProfile.uid));
+          const createdSnap = await getDocs(createdQuery);
+          const createdData = createdSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
+          
+          let assignedData: Establishment[] = [];
+          if (userProfile.establishmentIds && userProfile.establishmentIds.length > 0) {
+            const assignedQuery = query(collection(db, 'establishments'), where('__name__', 'in', userProfile.establishmentIds));
+            const assignedSnap = await getDocs(assignedQuery);
+            assignedData = assignedSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
+          }
+          
+          const allData = [...createdData, ...assignedData];
+          estData = Array.from(new Map(allData.map(item => [item.id, item])).values());
         }
         
-        const estSnap = await getDocs(estQuery);
-        const estData = estSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Establishment));
         setEstablishments(estData);
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'establishments');
@@ -85,9 +95,10 @@ export function Reports() {
           const revSnap = await getDocs(revQuery);
           revData = revSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Revenue));
         } else {
+          const estIds = establishments.map(e => e.id);
           if (selectedEst !== 'all') {
             // Manager selected a specific establishment
-            if (userProfile.establishmentIds.includes(selectedEst)) {
+            if (estIds.includes(selectedEst)) {
               let revQuery = query(collection(db, 'revenues'), where('establishmentId', '==', selectedEst));
               if (selectedService !== 'all') {
                 revQuery = query(revQuery, where('service', '==', selectedService));
@@ -95,9 +106,9 @@ export function Reports() {
               const revSnap = await getDocs(revQuery);
               revData = revSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Revenue));
             }
-          } else if (userProfile.establishmentIds.length > 0) {
+          } else if (estIds.length > 0) {
             // Manager selected 'all' establishments they have access to
-            const promises = userProfile.establishmentIds.map(id => {
+            const promises = estIds.map(id => {
               let revQuery = query(collection(db, 'revenues'), where('establishmentId', '==', id));
               if (selectedService !== 'all') {
                 revQuery = query(revQuery, where('service', '==', selectedService));
@@ -158,7 +169,7 @@ export function Reports() {
     };
 
     fetchRevenues();
-  }, [userProfile, selectedEst, selectedService, startDate, endDate]);
+  }, [userProfile, selectedEst, selectedService, startDate, endDate, establishments]);
 
   const setQuickRange = (days: number) => {
     setEndDate(format(new Date(), 'yyyy-MM-dd'));
