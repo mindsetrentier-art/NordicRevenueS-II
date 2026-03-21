@@ -1,0 +1,138 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        (('email' in request.auth.token) && request.auth.token.email == "mindsetrentier@gmail.com" && ('email_verified' in request.auth.token) && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && ('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+    
+    function isManager() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && ('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';
+    }
+    
+    function hasAccessToEstablishment(establishmentId, resourceData) {
+      return isAdmin() || 
+             (isManager() && ('establishmentIds' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) && establishmentId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.establishmentIds) ||
+             (resourceData != null && resourceData.createdBy == request.auth.uid) ||
+             (resourceData == null && exists(/databases/$(database)/documents/establishments/$(establishmentId)) && ('createdBy' in get(/databases/$(database)/documents/establishments/$(establishmentId)).data) && get(/databases/$(database)/documents/establishments/$(establishmentId)).data.createdBy == request.auth.uid);
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+    
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['email', 'displayName', 'role', 'establishmentIds', 'createdAt', 'updatedAt']) &&
+             data.email is string && isValidEmail(data.email) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             data.role in ['admin', 'manager'] &&
+             data.establishmentIds is list && data.establishmentIds.size() <= 100 &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+    
+    function isValidEstablishment(data) {
+      return hasOnlyAllowedFields(['name', 'address', 'city', 'postalCode', 'createdBy', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 200)) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+             (!('postalCode' in data) || (data.postalCode is string && data.postalCode.size() <= 20)) &&
+             (!('createdBy' in data) || (data.createdBy is string && data.createdBy.size() <= 100)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+    
+    function isValidPayments(payments) {
+      return payments is map && 
+             payments.keys().hasOnly(['cb', 'cbContactless', 'cash', 'amex', 'amexContactless', 'tr', 'trContactless', 'transfer']) &&
+             payments.keys().hasAll(['cb', 'cbContactless', 'cash', 'amex', 'amexContactless', 'tr', 'trContactless', 'transfer']) &&
+             payments.cb is number && payments.cb >= 0 &&
+             payments.cbContactless is number && payments.cbContactless >= 0 &&
+             payments.cash is number && payments.cash >= 0 &&
+             payments.amex is number && payments.amex >= 0 &&
+             payments.amexContactless is number && payments.amexContactless >= 0 &&
+             payments.tr is number && payments.tr >= 0 &&
+             payments.trContactless is number && payments.trContactless >= 0 &&
+             payments.transfer is number && payments.transfer >= 0;
+    }
+    
+    function isValidRevenue(data, isUpdate) {
+      return hasOnlyAllowedFields(['establishmentId', 'date', 'service', 'payments', 'total', 'createdBy', 'createdAt', 'updatedAt']) &&
+             data.establishmentId is string && data.establishmentId.size() > 0 &&
+             data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+             data['service'] is string && (data['service'] == 'midi' || data['service'] == 'soir') &&
+             isValidPayments(data.payments) &&
+             data.total is number && data.total >= 0 &&
+             data.createdBy is string && (isUpdate || data.createdBy == request.auth.uid) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+    
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || (isAuthenticated() && ('email' in request.auth.token) && (userId == request.auth.token.email || userId == request.auth.token.email.lower()));
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isAdmin() || 
+        (isOwner(userId) && ('email' in request.auth.token) && request.resource.data.email == request.auth.token.email)
+      );
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      request.resource.data.email == resource.data.get('email', request.resource.data.email) &&
+                      request.resource.data.createdAt == resource.data.get('createdAt', request.resource.data.createdAt) && (
+        isAdmin() || 
+        (isOwner(userId) && request.resource.data.role == resource.data.get('role', 'manager') && request.resource.data.establishmentIds == resource.data.get('establishmentIds', []))
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && userId == request.auth.token.email);
+    }
+    
+    match /establishments/{establishmentId} {
+      allow read: if isAuthenticated() && hasAccessToEstablishment(establishmentId, resource.data);
+      allow create: if isAuthenticated() && isValidEstablishment(request.resource.data) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
+      allow update: if isAuthenticated() && isValidEstablishment(request.resource.data) && 
+                    request.resource.data.createdAt == resource.data.get('createdAt', request.resource.data.createdAt) && 
+                    (!('createdBy' in request.resource.data) || request.resource.data.createdBy == resource.data.get('createdBy', '')) &&
+                    (isAdmin() || resource.data.get('createdBy', '') == request.auth.uid);
+      allow delete: if isAdmin() || resource.data.get('createdBy', '') == request.auth.uid;
+    }
+    
+    match /revenues/{revenueId} {
+      allow read: if isAuthenticated() && hasAccessToEstablishment(resource.data.get('establishmentId', ''), null);
+      allow create: if isAuthenticated() && hasAccessToEstablishment(request.resource.data.establishmentId, null) && isValidRevenue(request.resource.data, false);
+      allow update: if isAuthenticated() && hasAccessToEstablishment(resource.data.get('establishmentId', ''), null) && isValidRevenue(request.resource.data, true) && 
+                    request.resource.data.establishmentId == resource.data.get('establishmentId', '') && 
+                    request.resource.data.createdAt == resource.data.get('createdAt', request.resource.data.createdAt) &&
+                    request.resource.data.createdBy == resource.data.get('createdBy', '');
+      allow delete: if isAdmin();
+    }
+  }
+}
