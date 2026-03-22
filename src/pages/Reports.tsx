@@ -17,9 +17,9 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear } from 'date-fns';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search } from 'lucide-react';
+import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -34,7 +34,17 @@ export function Reports() {
   const [period, setPeriod] = useState<Period>('weekly');
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [compareMode, setCompareMode] = useState<'none' | 'previous_period' | 'previous_year'>('none');
   const [revenues, setRevenues] = useState<Revenue[]>([]);
+  const [compRevenues, setCompRevenues] = useState<Revenue[]>([]);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    comparison: true,
+    kpis: true,
+    mainChart: true,
+    paymentChart: true,
+    dailyTable: true
+  });
   const [comparisons, setComparisons] = useState({
     today: { current: 0, previous: 0, percent: 0 },
     thisMonth: { current: 0, previous: 0, percent: 0 },
@@ -160,7 +170,27 @@ export function Reports() {
           return rev.date >= startDate && rev.date <= endDate;
         });
 
+        let compFilteredData: Revenue[] = [];
+        if (compareMode !== 'none') {
+          let compStartDate = '';
+          let compEndDate = '';
+          
+          if (compareMode === 'previous_period') {
+            const daysDiff = differenceInDays(parseISO(endDate), parseISO(startDate));
+            compEndDate = format(subDays(parseISO(startDate), 1), 'yyyy-MM-dd');
+            compStartDate = format(subDays(parseISO(compEndDate), daysDiff), 'yyyy-MM-dd');
+          } else if (compareMode === 'previous_year') {
+            compStartDate = format(subYears(parseISO(startDate), 1), 'yyyy-MM-dd');
+            compEndDate = format(subYears(parseISO(endDate), 1), 'yyyy-MM-dd');
+          }
+
+          compFilteredData = revData.filter(rev => {
+            return rev.date >= compStartDate && rev.date <= compEndDate;
+          });
+        }
+
         setRevenues(filteredData.reverse()); // Reverse to have chronological order for charts
+        setCompRevenues(compFilteredData.reverse());
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'revenues');
       } finally {
@@ -169,7 +199,7 @@ export function Reports() {
     };
 
     fetchRevenues();
-  }, [userProfile, selectedEst, selectedService, startDate, endDate, establishments]);
+  }, [userProfile, selectedEst, selectedService, startDate, endDate, establishments, compareMode]);
 
   const setQuickRange = (days: number) => {
     setEndDate(format(new Date(), 'yyyy-MM-dd'));
@@ -192,11 +222,38 @@ export function Reports() {
   };
 
   const generatePDF = async () => {
-    const reportElement = document.getElementById('report-content');
-    if (!reportElement) return;
+    const comparisonEl = document.getElementById('report-comparison');
+    const kpisEl = document.getElementById('report-kpis');
+    const mainChartEl = document.getElementById('report-main-chart');
+    const paymentChartEl = document.getElementById('report-payment-chart');
+    const dailyTableEl = document.getElementById('report-daily-table');
+
+    const originalDisplay = {
+      comparison: comparisonEl?.style.display,
+      kpis: kpisEl?.style.display,
+      mainChart: mainChartEl?.style.display,
+      paymentChart: paymentChartEl?.style.display,
+      dailyTable: dailyTableEl?.style.display
+    };
+
+    if (!exportOptions.comparison && comparisonEl) comparisonEl.style.display = 'none';
+    if (!exportOptions.kpis && kpisEl) kpisEl.style.display = 'none';
+    if (!exportOptions.mainChart && mainChartEl) mainChartEl.style.display = 'none';
+    if (!exportOptions.paymentChart && paymentChartEl) paymentChartEl.style.display = 'none';
+    if (!exportOptions.dailyTable && dailyTableEl) dailyTableEl.style.display = 'none';
+
+    const reportElement = document.getElementById('pdf-export-content');
+    if (!reportElement) {
+      if (comparisonEl) comparisonEl.style.display = originalDisplay.comparison || '';
+      if (kpisEl) kpisEl.style.display = originalDisplay.kpis || '';
+      if (mainChartEl) mainChartEl.style.display = originalDisplay.mainChart || '';
+      if (paymentChartEl) paymentChartEl.style.display = originalDisplay.paymentChart || '';
+      if (dailyTableEl) dailyTableEl.style.display = originalDisplay.dailyTable || '';
+      return;
+    }
 
     try {
-      const canvas = await html2canvas(reportElement, { scale: 2 });
+      const canvas = await html2canvas(reportElement, { scale: 2, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -206,6 +263,14 @@ export function Reports() {
       pdf.save(`rapport-recettes-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+    } finally {
+      if (comparisonEl) comparisonEl.style.display = originalDisplay.comparison || '';
+      if (kpisEl) kpisEl.style.display = originalDisplay.kpis || '';
+      if (mainChartEl) mainChartEl.style.display = originalDisplay.mainChart || '';
+      if (paymentChartEl) paymentChartEl.style.display = originalDisplay.paymentChart || '';
+      if (dailyTableEl) dailyTableEl.style.display = originalDisplay.dailyTable || '';
+      
+      setShowExportModal(false);
     }
   };
 
@@ -225,42 +290,132 @@ export function Reports() {
     }
   };
 
-  // Prepare data for charts
-  const chartData = revenues.reduce((acc, rev) => {
-    const dateStr = format(parseISO(rev.date), 'dd MMM', { locale: fr });
-    const existing = acc.find(item => item.date === dateStr);
+  const exportCSV = () => {
+    const headers = ['Période', 'Date', 'Établissement', 'Service', 'Total', 'CB', 'Espèces', 'TR', 'AMEX', 'Virement'];
     
-    const cb = rev.payments.cb + rev.payments.cbContactless;
-    const cash = rev.payments.cash;
-    const tr = rev.payments.tr + rev.payments.trContactless;
-    const amex = rev.payments.amex + rev.payments.amexContactless;
-    const transfer = rev.payments.transfer;
-
-    if (existing) {
-      existing.total += rev.total;
-      existing.cb += cb;
-      existing.cash += cash;
-      existing.tr += tr;
-      existing.amex += amex;
-      existing.transfer += transfer;
-    } else {
-      acc.push({
-        date: dateStr,
-        total: rev.total,
-        cb,
-        cash,
-        tr,
-        amex,
-        transfer
+    const generateRows = (data: Revenue[], periodLabel: string) => {
+      return data.map(rev => {
+        const est = establishments.find(e => e.id === rev.establishmentId);
+        const estName = est ? est.name : 'Inconnu';
+        const cb = rev.payments.cb + rev.payments.cbContactless;
+        const amex = rev.payments.amex + rev.payments.amexContactless;
+        const tr = rev.payments.tr + rev.payments.trContactless;
+        
+        return [
+          periodLabel,
+          format(parseISO(rev.date), 'dd/MM/yyyy'),
+          `"${estName}"`,
+          rev.service,
+          rev.total,
+          cb,
+          rev.payments.cash,
+          tr,
+          amex,
+          rev.payments.transfer
+        ].join(',');
       });
+    };
+
+    let rows = generateRows(revenues, 'Actuelle');
+    
+    if (compareMode !== 'none') {
+      rows = rows.concat(generateRows(compRevenues, 'Comparaison'));
     }
-    return acc;
-  }, [] as any[]);
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `export-recettes-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Prepare data for charts
+  const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
+
+  const chartData = days.map((day, index) => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const displayDate = format(day, 'dd MMM', { locale: fr });
+    
+    const currentDayRevs = revenues.filter(r => r.date === dateStr);
+    const total = currentDayRevs.reduce((sum, r) => sum + r.total, 0);
+    const cb = currentDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
+    const cash = currentDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
+    const tr = currentDayRevs.reduce((sum, r) => sum + r.payments.tr + r.payments.trContactless, 0);
+    const amex = currentDayRevs.reduce((sum, r) => sum + r.payments.amex + r.payments.amexContactless, 0);
+    const transfer = currentDayRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
+
+    let compTotal = undefined;
+    let compCb = undefined;
+    let compCash = undefined;
+    let compTr = undefined;
+    let compAmex = undefined;
+    let compTransfer = undefined;
+
+    if (compareMode !== 'none') {
+      let compDateStr = '';
+      if (compareMode === 'previous_period') {
+        const daysDiff = differenceInDays(parseISO(endDate), parseISO(startDate));
+        const compEndDate = subDays(parseISO(startDate), 1);
+        const compStartDate = subDays(compEndDate, daysDiff);
+        const compDays = eachDayOfInterval({ start: compStartDate, end: compEndDate });
+        if (compDays[index]) {
+          compDateStr = format(compDays[index], 'yyyy-MM-dd');
+        }
+      } else if (compareMode === 'previous_year') {
+        compDateStr = format(subYears(day, 1), 'yyyy-MM-dd');
+      }
+      
+      if (compDateStr) {
+        const compDayRevs = compRevenues.filter(r => r.date === compDateStr);
+        compTotal = compDayRevs.reduce((sum, r) => sum + r.total, 0);
+        compCb = compDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
+        compCash = compDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
+        compTr = compDayRevs.reduce((sum, r) => sum + r.payments.tr + r.payments.trContactless, 0);
+        compAmex = compDayRevs.reduce((sum, r) => sum + r.payments.amex + r.payments.amexContactless, 0);
+        compTransfer = compDayRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
+      }
+    }
+
+    return {
+      date: displayDate,
+      fullDate: dateStr,
+      total,
+      cb,
+      cash,
+      tr,
+      amex,
+      transfer,
+      compTotal,
+      compCb,
+      compCash,
+      compTr,
+      compAmex,
+      compTransfer
+    };
+  });
 
   const totalRevenue = revenues.reduce((sum, rev) => sum + rev.total, 0);
+  const compTotalRevenue = compRevenues.reduce((sum, rev) => sum + rev.total, 0);
+  
   // Calculate unique days for average
   const uniqueDays = new Set(revenues.map(r => r.date)).size;
   const avgRevenue = uniqueDays > 0 ? totalRevenue / uniqueDays : 0;
+  
+  const compUniqueDays = new Set(compRevenues.map(r => r.date)).size;
+  const compAvgRevenue = compUniqueDays > 0 ? compTotalRevenue / compUniqueDays : 0;
+
+  const calcPercent = (curr: number, prev: number) => prev === 0 ? (curr > 0 ? 100 : 0) : ((curr - prev) / prev) * 100;
+  const periodPercent = calcPercent(totalRevenue, compTotalRevenue);
+  const avgPercent = calcPercent(avgRevenue, compAvgRevenue);
+
+  const cbTotal = chartData.reduce((sum, d) => sum + d.cb, 0);
+  const cashTotal = chartData.reduce((sum, d) => sum + d.cash, 0);
+  const trTotal = chartData.reduce((sum, d) => sum + d.tr, 0);
+  const amexTotal = chartData.reduce((sum, d) => sum + d.amex, 0);
+  const transferTotal = chartData.reduce((sum, d) => sum + d.transfer, 0);
 
   const sendByEmail = () => {
     const formatCurrency = (val: number) => val.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -349,7 +504,13 @@ Généré par NordicRevenueS`;
         
         <div className="flex flex-wrap items-center gap-3">
           <button 
-            onClick={generatePDF}
+            onClick={exportCSV}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <FileSpreadsheet size={16} /> Exporter CSV
+          </button>
+          <button 
+            onClick={() => setShowExportModal(true)}
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
           >
             <Download size={16} /> Exporter PDF
@@ -468,78 +629,115 @@ Généré par NordicRevenueS`;
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Comparaison des chiffres d'affaires */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Comparaison des chiffres d'affaires</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Ce Jour */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 mb-1">Ce jour vs N-1</p>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xl font-black text-slate-900">{comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-                <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.today.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-              </div>
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.today.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.today.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
-                {comparisons.today.percent > 0 ? <TrendingUp size={14} /> : comparisons.today.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
-                {Math.abs(comparisons.today.percent).toFixed(1)}%
-              </div>
-            </div>
-          </div>
-          
-          {/* Ce Mois */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 mb-1">Ce mois vs N-1</p>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xl font-black text-slate-900">{comparisons.thisMonth.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-                <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.thisMonth.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-              </div>
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.thisMonth.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.thisMonth.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
-                {comparisons.thisMonth.percent > 0 ? <TrendingUp size={14} /> : comparisons.thisMonth.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
-                {Math.abs(comparisons.thisMonth.percent).toFixed(1)}%
-              </div>
-            </div>
-          </div>
-
-          {/* Cette Année */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 mb-1">Cette année vs N-1</p>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xl font-black text-slate-900">{comparisons.thisYear.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-                <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.thisYear.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-              </div>
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.thisYear.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.thisYear.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
-                {comparisons.thisYear.percent > 0 ? <TrendingUp size={14} /> : comparisons.thisYear.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
-                {Math.abs(comparisons.thisYear.percent).toFixed(1)}%
-              </div>
-            </div>
-          </div>
+        <div className="flex-1">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+            <TrendingUp size={14} /> Comparer à
+          </label>
+          <select
+            value={compareMode}
+            onChange={(e) => setCompareMode(e.target.value as any)}
+            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="none">Aucune comparaison</option>
+            <option value="previous_period">Période précédente</option>
+            <option value="previous_year">Année précédente</option>
+          </select>
         </div>
       </div>
 
       {loading ? (
         <div className="h-64 flex items-center justify-center text-slate-400">Chargement des données...</div>
       ) : (
-        <div id="report-content" className="space-y-8">
+        <div id="pdf-export-content" className="space-y-8">
+          {/* Comparaison des chiffres d'affaires */}
+          {compareMode !== 'none' && (
+            <div id="report-comparison" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Comparaison des chiffres d'affaires</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Ce Jour */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-xs font-semibold text-slate-500 mb-1">Ce jour vs N-1</p>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-xl font-black text-slate-900">{comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                      <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.today.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                    </div>
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.today.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.today.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                      {comparisons.today.percent > 0 ? <TrendingUp size={14} /> : comparisons.today.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                      {Math.abs(comparisons.today.percent).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Ce Mois */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-xs font-semibold text-slate-500 mb-1">Ce mois vs N-1</p>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-xl font-black text-slate-900">{comparisons.thisMonth.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                      <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.thisMonth.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                    </div>
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.thisMonth.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.thisMonth.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                      {comparisons.thisMonth.percent > 0 ? <TrendingUp size={14} /> : comparisons.thisMonth.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                      {Math.abs(comparisons.thisMonth.percent).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cette Année */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-xs font-semibold text-slate-500 mb-1">Cette année vs N-1</p>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-xl font-black text-slate-900">{comparisons.thisYear.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                      <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.thisYear.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                    </div>
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.thisYear.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.thisYear.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                      {comparisons.thisYear.percent > 0 ? <TrendingUp size={14} /> : comparisons.thisYear.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                      {Math.abs(comparisons.thisYear.percent).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* KPI Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div id="report-kpis" className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-sm font-semibold text-slate-500 mb-1">Chiffre d'Affaires Total</p>
-              <p className="text-3xl font-black text-slate-900">
-                {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              <div className="flex items-end justify-between">
+                <p className="text-3xl font-black text-slate-900">
+                  {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                </p>
+                {compareMode !== 'none' && (
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${periodPercent > 0 ? 'bg-emerald-100 text-emerald-700' : periodPercent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                    {periodPercent > 0 ? <TrendingUp size={14} /> : periodPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                    {Math.abs(periodPercent).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                {compareMode !== 'none' ? `vs ${compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : 'Sur la période sélectionnée'}
               </p>
-              <p className="text-xs text-slate-400 mt-2">Sur la période sélectionnée</p>
             </div>
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-sm font-semibold text-slate-500 mb-1">Moyenne par Jour</p>
-              <p className="text-3xl font-black text-slate-900">
-                {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              <div className="flex items-end justify-between">
+                <p className="text-3xl font-black text-slate-900">
+                  {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                </p>
+                {compareMode !== 'none' && (
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${avgPercent > 0 ? 'bg-emerald-100 text-emerald-700' : avgPercent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                    {avgPercent > 0 ? <TrendingUp size={14} /> : avgPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                    {Math.abs(avgPercent).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                {compareMode !== 'none' ? `vs ${compAvgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : `Sur ${uniqueDays} jours d'activité`}
               </p>
-              <p className="text-xs text-slate-400 mt-2">Sur {uniqueDays} jours d'activité</p>
             </div>
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-sm font-semibold text-slate-500 mb-1">Meilleure Journée</p>
@@ -557,7 +755,7 @@ Généré par NordicRevenueS`;
           </div>
 
           {/* Main Chart */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div id="report-main-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h3 className="text-lg font-bold text-slate-900 mb-6">Évolution du Chiffre d'Affaires</h3>
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -578,23 +776,40 @@ Généré par NordicRevenueS`;
                   />
                   <Tooltip 
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`${value.toFixed(2)} €`, 'Total']}
+                    formatter={(value: number, name: string) => {
+                      if (name === 'compTotal') return [`${value.toFixed(2)} €`, 'Comparaison'];
+                      return [`${value.toFixed(2)} €`, 'Total'];
+                    }}
                   />
+                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
                   <Line 
                     type="monotone" 
                     dataKey="total" 
+                    name="Période Actuelle"
                     stroke="#2563eb" 
                     strokeWidth={3}
                     dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
                     activeDot={{ r: 6 }}
                   />
+                  {compareMode !== 'none' && (
+                    <Line 
+                      type="monotone" 
+                      dataKey="compTotal" 
+                      name="Comparaison"
+                      stroke="#94a3b8" 
+                      strokeWidth={3}
+                      strokeDasharray="5 5"
+                      dot={{ r: 4, fill: '#94a3b8', strokeWidth: 2, stroke: '#fff' }}
+                      activeDot={{ r: 6 }}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* Payment Breakdown Chart */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div id="report-payment-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-slate-900">Répartition par Moyen de Paiement</h3>
               <button
@@ -626,13 +841,172 @@ Généré par NordicRevenueS`;
                     formatter={(value: number) => `${value.toFixed(2)} €`}
                   />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  <Bar dataKey="cb" name="CB" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
-                  <Bar dataKey="amex" name="AMEX" stackId="a" fill="#f59e0b" />
-                  <Bar dataKey="tr" name="TR" stackId="a" fill="#10b981" />
-                  <Bar dataKey="cash" name="Espèces" stackId="a" fill="#8b5cf6" />
-                  <Bar dataKey="transfer" name="Virement" stackId="a" fill="#64748b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="cb" name="CB" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="amex" name="AMEX" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="tr" name="TR" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="transfer" name="Virement" fill="#64748b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Daily Breakdown Table */}
+          <div id="report-daily-table" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+            <h3 className="text-lg font-bold text-slate-900 mb-6">Détail Journalier des Paiements</h3>
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="border-b border-slate-200 text-sm text-slate-500">
+                  <th className="pb-3 font-semibold">Date</th>
+                  <th className="pb-3 font-semibold text-right">CB</th>
+                  <th className="pb-3 font-semibold text-right">AMEX</th>
+                  <th className="pb-3 font-semibold text-right">TR</th>
+                  <th className="pb-3 font-semibold text-right">Espèces</th>
+                  <th className="pb-3 font-semibold text-right">Virement</th>
+                  <th className="pb-3 font-semibold text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {chartData.map((day, idx) => (
+                  <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="py-3 font-medium text-slate-900">{day.date}</td>
+                    <td className="py-3 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="py-3 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="py-3 text-right text-slate-600">{day.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="py-3 text-right text-slate-600">{day.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="py-3 text-right text-slate-600">{day.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="py-3 text-right font-bold text-slate-900">{day.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="text-sm font-bold bg-slate-50">
+                <tr>
+                  <td className="py-3 px-2 text-slate-900">Total Période</td>
+                  <td className="py-3 text-right text-slate-900">{cbTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  <td className="py-3 text-right text-slate-900">{amexTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  <td className="py-3 text-right text-slate-900">{trTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  <td className="py-3 text-right text-slate-900">{cashTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  <td className="py-3 text-right text-slate-900">{transferTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  <td className="py-3 text-right text-slate-900">{totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                </tr>
+                {compareMode !== 'none' && (
+                  <>
+                    <tr className="border-t border-slate-200">
+                      <td className="py-3 px-2 text-slate-500">Total Comparaison</td>
+                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCb || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTr || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCash || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      <td className="py-3 text-right text-slate-500">{compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    </tr>
+                    <tr className="border-t border-slate-200">
+                      <td className="py-3 px-2 text-slate-500">Évolution</td>
+                      <td className="py-3 text-right">
+                        <span className={calcPercent(cbTotal, chartData.reduce((sum, d) => sum + (d.compCb || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
+                          {calcPercent(cbTotal, chartData.reduce((sum, d) => sum + (d.compCb || 0), 0)) > 0 ? '+' : ''}{calcPercent(cbTotal, chartData.reduce((sum, d) => sum + (d.compCb || 0), 0)).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className={calcPercent(amexTotal, chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
+                          {calcPercent(amexTotal, chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0)) > 0 ? '+' : ''}{calcPercent(amexTotal, chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0)).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className={calcPercent(trTotal, chartData.reduce((sum, d) => sum + (d.compTr || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
+                          {calcPercent(trTotal, chartData.reduce((sum, d) => sum + (d.compTr || 0), 0)) > 0 ? '+' : ''}{calcPercent(trTotal, chartData.reduce((sum, d) => sum + (d.compTr || 0), 0)).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className={calcPercent(cashTotal, chartData.reduce((sum, d) => sum + (d.compCash || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
+                          {calcPercent(cashTotal, chartData.reduce((sum, d) => sum + (d.compCash || 0), 0)) > 0 ? '+' : ''}{calcPercent(cashTotal, chartData.reduce((sum, d) => sum + (d.compCash || 0), 0)).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className={calcPercent(transferTotal, chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
+                          {calcPercent(transferTotal, chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0)) > 0 ? '+' : ''}{calcPercent(transferTotal, chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0)).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className={periodPercent > 0 ? 'text-emerald-600' : 'text-red-600'}>
+                          {periodPercent > 0 ? '+' : ''}{periodPercent.toFixed(1)}%
+                        </span>
+                      </td>
+                    </tr>
+                  </>
+                )}
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+      {/* Export PDF Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Personnaliser l'export PDF</h3>
+            <div className="space-y-3 mb-6">
+              {compareMode !== 'none' && (
+                <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                  <input 
+                    type="checkbox" 
+                    checked={exportOptions.comparison}
+                    onChange={(e) => setExportOptions({...exportOptions, comparison: e.target.checked})}
+                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Comparaison des chiffres d'affaires</span>
+                </label>
+              )}
+              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                <input 
+                  type="checkbox" 
+                  checked={exportOptions.kpis}
+                  onChange={(e) => setExportOptions({...exportOptions, kpis: e.target.checked})}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Résumé (KPIs)</span>
+              </label>
+              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                <input 
+                  type="checkbox" 
+                  checked={exportOptions.mainChart}
+                  onChange={(e) => setExportOptions({...exportOptions, mainChart: e.target.checked})}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Graphique d'évolution du CA</span>
+              </label>
+              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                <input 
+                  type="checkbox" 
+                  checked={exportOptions.paymentChart}
+                  onChange={(e) => setExportOptions({...exportOptions, paymentChart: e.target.checked})}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Répartition par moyen de paiement</span>
+              </label>
+              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                <input 
+                  type="checkbox" 
+                  checked={exportOptions.dailyTable}
+                  onChange={(e) => setExportOptions({...exportOptions, dailyTable: e.target.checked})}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Tableau détaillé journalier</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={generatePDF}
+                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors"
+              >
+                Générer PDF
+              </button>
             </div>
           </div>
         </div>
