@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 
+import { MusicPlayer } from './MusicPlayer';
+
 export function Layout() {
   const { userProfile, logout } = useAuth();
   const { themeColor } = useTheme();
@@ -43,6 +45,7 @@ export function Layout() {
         boxShadow: `inset 0 0 0 4px var(--theme-color), inset 0 0 20px 4px var(--theme-color-light)`
       }}
     >
+      <MusicPlayer />
       {/* Mobile Header */}
       <header className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">
