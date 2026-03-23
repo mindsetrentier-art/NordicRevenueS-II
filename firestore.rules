@@ -95,6 +95,20 @@ service cloud.firestore {
              data.createdAt is timestamp &&
              data.updatedAt is timestamp;
     }
+
+    function isValidAlertRule(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'establishmentId', 'type', 'threshold', 'paymentMethod', 'timeframe', 'isActive', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.establishmentId is string && data.establishmentId.size() > 0 &&
+             data.type in ['revenue_drop', 'payment_method_change'] &&
+             data.threshold is number && data.threshold >= 0 &&
+             (!('paymentMethod' in data) || data.paymentMethod == null || data.paymentMethod in ['cb', 'cbContactless', 'cash', 'amex', 'amexContactless', 'tr', 'trContactless', 'transfer']) &&
+             data.timeframe in ['daily', 'weekly', 'monthly'] &&
+             data.isActive is bool &&
+             data.createdAt is timestamp &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
     
     // ===============================================================
     // Rules
@@ -133,6 +147,14 @@ service cloud.firestore {
                     request.resource.data.createdAt == resource.data.get('createdAt', request.resource.data.createdAt) &&
                     request.resource.data.createdBy == resource.data.get('createdBy', '');
       allow delete: if isAdmin();
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidAlertRule(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidAlertRule(request.resource.data) &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
   }
 }

@@ -14,9 +14,11 @@ import {
   Save,
   CheckCircle2,
   Sun,
-  Moon
+  Moon,
+  Calculator as CalculatorIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Calculator } from '../components/Calculator';
 
 const INITIAL_PAYMENTS: Payments = {
   cb: 0,
@@ -60,6 +62,7 @@ export function RevenueEntry() {
   const [success, setSuccess] = useState(false);
   const [isMidiActive, setIsMidiActive] = useState(true);
   const [isSoirActive, setIsSoirActive] = useState(true);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('activePaymentMethods', JSON.stringify(activeMethods));
@@ -168,10 +171,24 @@ export function RevenueEntry() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saisie des Recettes</h1>
-        <p className="text-slate-500 text-sm mt-1">Enregistrez les encaissements pour les services du midi et du soir.</p>
+    <div className="max-w-5xl mx-auto relative">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saisie des Recettes</h1>
+          <p className="text-slate-500 text-sm mt-1">Enregistrez les encaissements pour les services du midi et du soir.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-colors shadow-sm ${
+            isCalculatorOpen 
+              ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <CalculatorIcon size={20} />
+          <span>Calculatrice</span>
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -265,6 +282,10 @@ export function RevenueEntry() {
           </div>
         </div>
       </form>
+
+      {isCalculatorOpen && (
+        <Calculator onClose={() => setIsCalculatorOpen(false)} />
+      )}
     </div>
   );
 }

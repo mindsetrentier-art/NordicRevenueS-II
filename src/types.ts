@@ -52,6 +52,22 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+export type AlertType = 'revenue_drop' | 'payment_method_change';
+
+export interface AlertRule {
+  id: string;
+  userId: string;
+  name: string;
+  establishmentId: string; // 'all' or specific ID
+  type: AlertType;
+  threshold: number;
+  paymentMethod?: keyof Payments; // e.g., 'cb', 'amex'
+  timeframe: 'daily' | 'weekly' | 'monthly';
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
 export interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;

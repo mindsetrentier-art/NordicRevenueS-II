@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Revenue, Establishment } from '../types';
+import { Revenue, Establishment, AlertRule } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
 import { 
@@ -11,7 +11,8 @@ import {
   CreditCard, 
   Banknote, 
   Receipt,
-  ArrowRight
+  ArrowRight,
+  Bell
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -59,6 +60,7 @@ export function Dashboard() {
   const [selectedService, setSelectedService] = useState<string>('all');
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [prevRevenues, setPrevRevenues] = useState<Revenue[]>([]);
+  const [alerts, setAlerts] = useState<AlertRule[]>([]);
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,12 @@ export function Dashboard() {
         }
         
         setEstablishments(estData);
+
+        // Fetch alerts
+        const alertsQuery = query(collection(db, 'alerts'), where('userId', '==', userProfile.uid), where('isActive', '==', true));
+        const alertsSnap = await getDocs(alertsQuery);
+        const alertsData = alertsSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as AlertRule));
+        setAlerts(alertsData);
 
         // Fetch revenues for the selected date range and previous period
         const daysDiff = differenceInDays(new Date(endDate), new Date(startDate)) + 1;
@@ -223,6 +231,49 @@ export function Dashboard() {
     ? chartData.reduce((max, r) => max.total > r.total ? max : r)
     : null;
 
+  // Evaluate alerts
+  const triggeredAlerts = alerts.filter(alert => {
+    if (alert.establishmentId !== 'all' && selectedEst !== 'all' && alert.establishmentId !== selectedEst) {
+      return false;
+    }
+
+    const alertRevenues = alert.establishmentId === 'all' 
+      ? filteredRevenues 
+      : filteredRevenues.filter(r => r.establishmentId === alert.establishmentId);
+    
+    const alertPrevRevenues = alert.establishmentId === 'all'
+      ? filteredPrevRevenues
+      : filteredPrevRevenues.filter(r => r.establishmentId === alert.establishmentId);
+
+    if (alert.type === 'revenue_drop') {
+      const alertTotalRevenue = alertRevenues.reduce((sum, r) => sum + r.total, 0);
+      return alertTotalRevenue > 0 && alertTotalRevenue < alert.threshold; // Only trigger if there is some revenue but it's below threshold
+    } else if (alert.type === 'payment_method_change' && alert.paymentMethod) {
+      const getPaymentTotal = (revs: Revenue[]) => revs.reduce((sum, r) => {
+        const p = r.payments;
+        if (alert.paymentMethod === 'cb') return sum + p.cb + p.cbContactless;
+        if (alert.paymentMethod === 'amex') return sum + p.amex + p.amexContactless;
+        if (alert.paymentMethod === 'tr') return sum + p.tr + p.trContactless;
+        if (alert.paymentMethod === 'cash') return sum + p.cash;
+        if (alert.paymentMethod === 'transfer') return sum + p.transfer;
+        return sum;
+      }, 0);
+
+      const currentTotal = getPaymentTotal(alertRevenues);
+      const prevTotal = getPaymentTotal(alertPrevRevenues);
+      
+      const currentAllPayments = alertRevenues.reduce((sum, r) => sum + r.total, 0);
+      const prevAllPayments = alertPrevRevenues.reduce((sum, r) => sum + r.total, 0);
+
+      const currentPct = currentAllPayments > 0 ? (currentTotal / currentAllPayments) * 100 : 0;
+      const prevPct = prevAllPayments > 0 ? (prevTotal / prevAllPayments) * 100 : 0;
+      
+      const change = Math.abs(currentPct - prevPct);
+      return prevAllPayments > 0 && change > alert.threshold;
+    }
+    return false;
+  });
+
   const setQuickRange = (days: number) => {
     setEndDate(format(new Date(), 'yyyy-MM-dd'));
     setStartDate(format(subDays(new Date(), days - 1), 'yyyy-MM-dd'));
@@ -289,6 +340,33 @@ export function Dashboard() {
           </select>
         </div>
       </div>
+
+      {/* Triggered Alerts */}
+      {triggeredAlerts.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Bell className="text-rose-600" size={20} />
+            <h3 className="font-bold text-rose-900">Alertes déclenchées ({triggeredAlerts.length})</h3>
+          </div>
+          <div className="space-y-2">
+            {triggeredAlerts.map(alert => (
+              <div key={alert.id} className="bg-white rounded-xl p-3 border border-rose-100 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900">{alert.name}</p>
+                  <p className="text-sm text-slate-500">
+                    {alert.type === 'revenue_drop' 
+                      ? `Le chiffre d'affaires est inférieur au seuil de ${alert.threshold} €` 
+                      : `L'utilisation du moyen de paiement a varié de plus de ${alert.threshold} %`}
+                  </p>
+                </div>
+                <div className="text-xs font-medium bg-rose-100 text-rose-700 px-2 py-1 rounded-lg">
+                  {alert.establishmentId === 'all' ? 'Tous les établissements' : establishments.find(e => e.id === alert.establishmentId)?.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -409,7 +487,7 @@ export function Dashboard() {
             </div>
           </div>
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis 

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { ThemePicker } from './ThemePicker';
 import { 
   LayoutDashboard, 
   Store, 
   Receipt, 
   BarChart3, 
   Settings, 
+  Bell,
   LogOut,
   Menu,
   X
@@ -15,6 +18,7 @@ import clsx from 'clsx';
 
 export function Layout() {
   const { userProfile, logout } = useAuth();
+  const { themeColor } = useTheme();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -28,11 +32,17 @@ export function Layout() {
     { to: '/entry', icon: Receipt, label: 'Saisie Recettes' },
     { to: '/reports', icon: BarChart3, label: 'Rapports' },
     { to: '/establishments', icon: Store, label: 'Établissements' },
+    { to: '/alerts', icon: Bell, label: 'Alertes' },
     { to: '/settings', icon: Settings, label: 'Paramètres' },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900">
+    <div 
+      className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900 transition-colors duration-500"
+      style={{
+        boxShadow: `inset 0 0 0 4px var(--theme-color), inset 0 0 20px 4px var(--theme-color-light)`
+      }}
+    >
       {/* Mobile Header */}
       <header className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">
@@ -41,9 +51,12 @@ export function Layout() {
           </div>
           <h1 className="font-bold text-lg tracking-tight">NordicRevenueS</h1>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemePicker />
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </header>
 
       {/* Sidebar */}
@@ -78,6 +91,9 @@ export function Layout() {
         </nav>
 
         <div className="p-4 border-t border-slate-200">
+          <div className="flex items-center justify-between px-2 mb-4">
+            <ThemePicker direction="up" />
+          </div>
           <div className="flex items-center gap-3 px-4 py-3 mb-2">
             <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold uppercase">
               {userProfile?.displayName?.charAt(0) || userProfile?.email?.charAt(0) || 'U'}

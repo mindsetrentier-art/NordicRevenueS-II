@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet } from 'lucide-react';
+import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -38,6 +38,22 @@ export function Reports() {
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [compRevenues, setCompRevenues] = useState<Revenue[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const saved = localStorage.getItem('reportsVisibleColumns');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      cb: true,
+      amex: true,
+      tr: true,
+      cash: true,
+      transfer: true
+    };
+  });
   const [exportOptions, setExportOptions] = useState({
     comparison: true,
     kpis: true,
@@ -51,6 +67,10 @@ export function Reports() {
     thisYear: { current: 0, previous: 0, percent: 0 }
   });
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem('reportsVisibleColumns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
 
   useEffect(() => {
     const fetchEstablishments = async () => {
@@ -758,7 +778,7 @@ Généré par NordicRevenueS`;
           <div id="report-main-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h3 className="text-lg font-bold text-slate-900 mb-6">Évolution du Chiffre d'Affaires</h3>
             <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
@@ -820,7 +840,7 @@ Généré par NordicRevenueS`;
               </button>
             </div>
             <div id="payment-chart-container" className="h-80 w-full bg-white p-2">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
@@ -853,90 +873,180 @@ Généré par NordicRevenueS`;
 
           {/* Daily Breakdown Table */}
           <div id="report-daily-table" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-            <h3 className="text-lg font-bold text-slate-900 mb-6">Détail Journalier des Paiements</h3>
-            <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-sm text-slate-500">
-                  <th className="pb-3 font-semibold">Date</th>
-                  <th className="pb-3 font-semibold text-right">CB</th>
-                  <th className="pb-3 font-semibold text-right">AMEX</th>
-                  <th className="pb-3 font-semibold text-right">TR</th>
-                  <th className="pb-3 font-semibold text-right">Espèces</th>
-                  <th className="pb-3 font-semibold text-right">Virement</th>
-                  <th className="pb-3 font-semibold text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {chartData.map((day, idx) => (
-                  <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="py-3 font-medium text-slate-900">{day.date}</td>
-                    <td className="py-3 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    <td className="py-3 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    <td className="py-3 text-right text-slate-600">{day.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    <td className="py-3 text-right text-slate-600">{day.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    <td className="py-3 text-right text-slate-600">{day.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    <td className="py-3 text-right font-bold text-slate-900">{day.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="text-sm font-bold bg-slate-50">
-                <tr>
-                  <td className="py-3 px-2 text-slate-900">Total Période</td>
-                  <td className="py-3 text-right text-slate-900">{cbTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                  <td className="py-3 text-right text-slate-900">{amexTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                  <td className="py-3 text-right text-slate-900">{trTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                  <td className="py-3 text-right text-slate-900">{cashTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                  <td className="py-3 text-right text-slate-900">{transferTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                  <td className="py-3 text-right text-slate-900">{totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                </tr>
-                {compareMode !== 'none' && (
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-slate-900">Détail Journalier des Paiements</h3>
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumnSelector(!showColumnSelector)}
+                  className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
+                >
+                  <Columns size={14} /> Colonnes
+                </button>
+                {showColumnSelector && (
                   <>
-                    <tr className="border-t border-slate-200">
-                      <td className="py-3 px-2 text-slate-500">Total Comparaison</td>
-                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCb || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTr || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCash || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                      <td className="py-3 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                      <td className="py-3 text-right text-slate-500">{compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    </tr>
-                    <tr className="border-t border-slate-200">
-                      <td className="py-3 px-2 text-slate-500">Évolution</td>
-                      <td className="py-3 text-right">
-                        <span className={calcPercent(cbTotal, chartData.reduce((sum, d) => sum + (d.compCb || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                          {calcPercent(cbTotal, chartData.reduce((sum, d) => sum + (d.compCb || 0), 0)) > 0 ? '+' : ''}{calcPercent(cbTotal, chartData.reduce((sum, d) => sum + (d.compCb || 0), 0)).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className={calcPercent(amexTotal, chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                          {calcPercent(amexTotal, chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0)) > 0 ? '+' : ''}{calcPercent(amexTotal, chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0)).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className={calcPercent(trTotal, chartData.reduce((sum, d) => sum + (d.compTr || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                          {calcPercent(trTotal, chartData.reduce((sum, d) => sum + (d.compTr || 0), 0)) > 0 ? '+' : ''}{calcPercent(trTotal, chartData.reduce((sum, d) => sum + (d.compTr || 0), 0)).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className={calcPercent(cashTotal, chartData.reduce((sum, d) => sum + (d.compCash || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                          {calcPercent(cashTotal, chartData.reduce((sum, d) => sum + (d.compCash || 0), 0)) > 0 ? '+' : ''}{calcPercent(cashTotal, chartData.reduce((sum, d) => sum + (d.compCash || 0), 0)).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className={calcPercent(transferTotal, chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0)) > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                          {calcPercent(transferTotal, chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0)) > 0 ? '+' : ''}{calcPercent(transferTotal, chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0)).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className={periodPercent > 0 ? 'text-emerald-600' : 'text-red-600'}>
-                          {periodPercent > 0 ? '+' : ''}{periodPercent.toFixed(1)}%
-                        </span>
-                      </td>
-                    </tr>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowColumnSelector(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 z-20 p-2">
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input type="checkbox" checked={visibleColumns.cb} onChange={(e) => setVisibleColumns(p => ({...p, cb: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-700">CB</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input type="checkbox" checked={visibleColumns.amex} onChange={(e) => setVisibleColumns(p => ({...p, amex: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-700">AMEX</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input type="checkbox" checked={visibleColumns.tr} onChange={(e) => setVisibleColumns(p => ({...p, tr: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-700">TR</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input type="checkbox" checked={visibleColumns.cash} onChange={(e) => setVisibleColumns(p => ({...p, cash: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-700">Espèces</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                        <input type="checkbox" checked={visibleColumns.transfer} onChange={(e) => setVisibleColumns(p => ({...p, transfer: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-700">Virement</span>
+                      </label>
+                    </div>
                   </>
                 )}
-              </tfoot>
-            </table>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[500px] border border-slate-200 rounded-xl">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+                  <tr className="border-b border-slate-200 text-sm text-slate-500">
+                    <th className="py-3 px-4 font-semibold">Date</th>
+                    {visibleColumns.cb && <th className="py-3 px-4 font-semibold text-right">CB</th>}
+                    {visibleColumns.amex && <th className="py-3 px-4 font-semibold text-right">AMEX</th>}
+                    {visibleColumns.tr && <th className="py-3 px-4 font-semibold text-right">TR</th>}
+                    {visibleColumns.cash && <th className="py-3 px-4 font-semibold text-right">Espèces</th>}
+                    {visibleColumns.transfer && <th className="py-3 px-4 font-semibold text-right">Virement</th>}
+                    <th className="py-3 px-4 font-semibold text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {chartData.map((day, idx) => (
+                    <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-4 font-medium text-slate-900">{day.date}</td>
+                      {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600">{day.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600">{day.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600">{day.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      <td className="py-3 px-4 text-right font-bold text-slate-900">{day.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="text-sm font-bold bg-slate-100 sticky bottom-0 z-10 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                  <tr>
+                    <td className="py-4 px-4 text-slate-900 uppercase tracking-wider text-xs">Total Période</td>
+                    {visibleColumns.cb && <td className="py-4 px-4 text-right text-slate-900">{cbTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.amex && <td className="py-4 px-4 text-right text-slate-900">{amexTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.tr && <td className="py-4 px-4 text-right text-slate-900">{trTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.cash && <td className="py-4 px-4 text-right text-slate-900">{cashTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.transfer && <td className="py-4 px-4 text-right text-slate-900">{transferTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    <td className="py-4 px-4 text-right text-blue-600 text-base">{totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                  </tr>
+                  {compareMode !== 'none' && (
+                    <>
+                      <tr className="border-t border-slate-200 bg-slate-50">
+                        <td className="py-3 px-4 text-slate-500 uppercase tracking-wider text-xs">Total Comparaison</td>
+                        {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCb || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTr || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCash || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        <td className="py-3 px-4 text-right text-slate-500">{compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      </tr>
+                      <tr className="border-t border-slate-200 bg-slate-50">
+                        <td className="py-3 px-4 text-slate-500 uppercase tracking-wider text-xs">Évolution</td>
+                        {visibleColumns.cb && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = cbTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compCb || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleColumns.amex && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = amexTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleColumns.tr && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = trTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compTr || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleColumns.cash && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = cashTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compCash || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleColumns.transfer && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = transferTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        <td className="py-3 px-4 text-right">
+                          <span className={`flex items-center justify-end gap-1 font-bold ${periodPercent > 0 ? 'text-emerald-600' : periodPercent < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {periodPercent > 0 ? <ArrowUpRight size={14} /> : periodPercent < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                            {Math.abs(periodPercent).toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tfoot>
+              </table>
+            </div>
           </div>
         </div>
       )}

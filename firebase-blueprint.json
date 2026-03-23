@@ -94,6 +94,56 @@
         }
       },
       "required": ["establishmentId", "date", "payments", "total", "createdBy", "createdAt", "updatedAt"]
+    },
+    "AlertRule": {
+      "title": "AlertRule",
+      "description": "Custom alert rule for revenue or payment methods",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID of the user who created the alert"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the alert"
+        },
+        "establishmentId": {
+          "type": "string",
+          "description": "ID of the establishment or 'all'"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["revenue_drop", "payment_method_change"],
+          "description": "Type of the alert"
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Threshold value for the alert"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method to monitor (if type is payment_method_change)"
+        },
+        "timeframe": {
+          "type": "string",
+          "enum": ["daily", "weekly", "monthly"],
+          "description": "Timeframe to evaluate the alert"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the alert is active"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "name", "establishmentId", "type", "threshold", "timeframe", "isActive", "createdAt"]
     }
   },
   "firestore": {
@@ -114,6 +164,12 @@
         "$ref": "#/entities/Revenue"
       },
       "description": "Daily revenue entries"
+    },
+    "/alerts/{alertId}": {
+      "schema": {
+        "$ref": "#/entities/AlertRule"
+      },
+      "description": "Custom alert rules"
     }
   }
 }

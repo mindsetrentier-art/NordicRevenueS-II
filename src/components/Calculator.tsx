@@ -1,0 +1,353 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Delete, Palette } from 'lucide-react';
+
+interface CalculatorProps {
+  onClose: () => void;
+}
+
+type Theme = 'light' | 'dark' | 'glass' | 'white' | 'black' | 'neonPink' | 'neonGreen' | 'neonBlue' | 'neonYellow' | 'neonOrange' | 'neonCyan' | 'neonPurple';
+
+const themes: Record<Theme, any> = {
+  light: {
+    container: 'bg-slate-50 border-slate-200 shadow-2xl text-slate-800',
+    header: 'bg-slate-100 border-slate-200 text-slate-600',
+    display: 'bg-white text-slate-900 border-b border-slate-200',
+    keypad: 'bg-slate-50',
+    btnNum: 'bg-white text-slate-800 hover:bg-slate-100 shadow-sm border border-slate-200',
+    btnOp: 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100',
+    btnOpActive: 'bg-blue-600 text-white shadow-inner border-blue-600',
+    btnAction: 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300',
+    btnDanger: 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100',
+    btnEquals: 'bg-blue-600 text-white hover:bg-blue-700 shadow-md border-blue-600',
+  },
+  dark: {
+    container: 'bg-slate-900 border-slate-700 shadow-2xl text-white',
+    header: 'bg-slate-800 border-slate-700 text-slate-300',
+    display: 'bg-slate-950 text-white border-b border-slate-800',
+    keypad: 'bg-slate-900',
+    btnNum: 'bg-slate-800 text-white hover:bg-slate-700 border border-slate-700',
+    btnOp: 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20',
+    btnOpActive: 'bg-amber-500 text-slate-900 shadow-inner border-amber-500',
+    btnAction: 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600',
+    btnDanger: 'bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20',
+    btnEquals: 'bg-amber-500 text-slate-900 hover:bg-amber-400 shadow-md border-amber-500',
+  },
+  glass: {
+    container: 'bg-slate-900/60 backdrop-blur-2xl border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] text-white',
+    header: 'bg-white/5 border-white/10 text-white/80',
+    display: 'bg-black/20 text-white border-b border-white/10',
+    keypad: 'bg-transparent',
+    btnNum: 'bg-white/10 text-white hover:bg-white/20 border border-white/10',
+    btnOp: 'bg-fuchsia-500/20 text-fuchsia-300 hover:bg-fuchsia-500/30 border border-fuchsia-500/30',
+    btnOpActive: 'bg-fuchsia-500 text-white shadow-inner border-fuchsia-500',
+    btnAction: 'bg-white/20 text-white hover:bg-white/30 border border-white/20',
+    btnDanger: 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30',
+    btnEquals: 'bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white hover:from-fuchsia-400 hover:to-purple-500 shadow-[0_0_15px_rgba(217,70,239,0.4)] border border-fuchsia-400/50',
+  },
+  white: {
+    container: 'bg-white border-slate-200 shadow-2xl text-slate-900',
+    header: 'bg-white border-slate-200 text-slate-900',
+    display: 'bg-white text-slate-900 border-b border-slate-200',
+    keypad: 'bg-white',
+    btnNum: 'bg-white text-slate-900 hover:bg-slate-100 border border-slate-200',
+    btnOp: 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200',
+    btnOpActive: 'bg-slate-300 text-slate-900 shadow-inner border-slate-400',
+    btnAction: 'bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200',
+    btnDanger: 'bg-red-100 text-red-600 hover:bg-red-200 border border-red-200',
+    btnEquals: 'bg-slate-900 text-white hover:bg-slate-800 shadow-md border-slate-900',
+  },
+  black: {
+    container: 'bg-black border-slate-800 shadow-2xl text-white',
+    header: 'bg-black border-slate-800 text-white',
+    display: 'bg-black text-white border-b border-slate-800',
+    keypad: 'bg-black',
+    btnNum: 'bg-black text-white hover:bg-slate-900 border border-slate-800',
+    btnOp: 'bg-slate-900 text-white hover:bg-slate-800 border border-slate-800',
+    btnOpActive: 'bg-slate-700 text-white shadow-inner border-slate-600',
+    btnAction: 'bg-slate-900 text-white hover:bg-slate-800 border border-slate-800',
+    btnDanger: 'bg-red-900/50 text-red-500 hover:bg-red-900/80 border border-red-900/50',
+    btnEquals: 'bg-white text-black hover:bg-slate-200 shadow-md border-white',
+  },
+  neonPink: {
+    container: 'bg-slate-950 border-pink-500/50 shadow-[0_0_30px_rgba(236,72,153,0.3)] text-pink-100',
+    header: 'bg-slate-950 border-pink-500/30 text-pink-400',
+    display: 'bg-slate-950 text-pink-400 border-b border-pink-500/30 shadow-[inset_0_0_20px_rgba(236,72,153,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-pink-100 hover:bg-pink-950 border border-pink-500/30 hover:border-pink-500 hover:shadow-[0_0_15px_rgba(236,72,153,0.5)]',
+    btnOp: 'bg-pink-950 text-pink-400 hover:bg-pink-900 border border-pink-500/50 hover:shadow-[0_0_15px_rgba(236,72,153,0.6)]',
+    btnOpActive: 'bg-pink-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(236,72,153,0.8)] border-pink-400',
+    btnAction: 'bg-slate-900 text-pink-300 hover:bg-pink-950 border border-pink-500/30 hover:border-pink-500 hover:shadow-[0_0_15px_rgba(236,72,153,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-pink-600 text-white hover:bg-pink-500 shadow-[0_0_20px_rgba(236,72,153,0.8)] border-pink-400',
+  },
+  neonGreen: {
+    container: 'bg-slate-950 border-green-500/50 shadow-[0_0_30px_rgba(34,197,94,0.3)] text-green-100',
+    header: 'bg-slate-950 border-green-500/30 text-green-400',
+    display: 'bg-slate-950 text-green-400 border-b border-green-500/30 shadow-[inset_0_0_20px_rgba(34,197,94,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-green-100 hover:bg-green-950 border border-green-500/30 hover:border-green-500 hover:shadow-[0_0_15px_rgba(34,197,94,0.5)]',
+    btnOp: 'bg-green-950 text-green-400 hover:bg-green-900 border border-green-500/50 hover:shadow-[0_0_15px_rgba(34,197,94,0.6)]',
+    btnOpActive: 'bg-green-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(34,197,94,0.8)] border-green-400',
+    btnAction: 'bg-slate-900 text-green-300 hover:bg-green-950 border border-green-500/30 hover:border-green-500 hover:shadow-[0_0_15px_rgba(34,197,94,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-green-600 text-white hover:bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.8)] border-green-400',
+  },
+  neonBlue: {
+    container: 'bg-slate-950 border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.3)] text-blue-100',
+    header: 'bg-slate-950 border-blue-500/30 text-blue-400',
+    display: 'bg-slate-950 text-blue-400 border-b border-blue-500/30 shadow-[inset_0_0_20px_rgba(59,130,246,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-blue-100 hover:bg-blue-950 border border-blue-500/30 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]',
+    btnOp: 'bg-blue-950 text-blue-400 hover:bg-blue-900 border border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.6)]',
+    btnOpActive: 'bg-blue-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(59,130,246,0.8)] border-blue-400',
+    btnAction: 'bg-slate-900 text-blue-300 hover:bg-blue-950 border border-blue-500/30 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.8)] border-blue-400',
+  },
+  neonYellow: {
+    container: 'bg-slate-950 border-yellow-400/50 shadow-[0_0_30px_rgba(250,204,21,0.3)] text-yellow-100',
+    header: 'bg-slate-950 border-yellow-400/30 text-yellow-400',
+    display: 'bg-slate-950 text-yellow-400 border-b border-yellow-400/30 shadow-[inset_0_0_20px_rgba(250,204,21,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-yellow-100 hover:bg-yellow-950 border border-yellow-400/30 hover:border-yellow-400 hover:shadow-[0_0_15px_rgba(250,204,21,0.5)]',
+    btnOp: 'bg-yellow-950 text-yellow-400 hover:bg-yellow-900 border border-yellow-400/50 hover:shadow-[0_0_15px_rgba(250,204,21,0.6)]',
+    btnOpActive: 'bg-yellow-500 text-slate-900 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(250,204,21,0.8)] border-yellow-300',
+    btnAction: 'bg-slate-900 text-yellow-300 hover:bg-yellow-950 border border-yellow-400/30 hover:border-yellow-400 hover:shadow-[0_0_15px_rgba(250,204,21,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-yellow-500 text-slate-900 hover:bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.8)] border-yellow-300',
+  },
+  neonOrange: {
+    container: 'bg-slate-950 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.3)] text-orange-100',
+    header: 'bg-slate-950 border-orange-500/30 text-orange-400',
+    display: 'bg-slate-950 text-orange-400 border-b border-orange-500/30 shadow-[inset_0_0_20px_rgba(249,115,22,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-orange-100 hover:bg-orange-950 border border-orange-500/30 hover:border-orange-500 hover:shadow-[0_0_15px_rgba(249,115,22,0.5)]',
+    btnOp: 'bg-orange-950 text-orange-400 hover:bg-orange-900 border border-orange-500/50 hover:shadow-[0_0_15px_rgba(249,115,22,0.6)]',
+    btnOpActive: 'bg-orange-500 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(249,115,22,0.8)] border-orange-400',
+    btnAction: 'bg-slate-900 text-orange-300 hover:bg-orange-950 border border-orange-500/30 hover:border-orange-500 hover:shadow-[0_0_15px_rgba(249,115,22,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-orange-500 text-white hover:bg-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.8)] border-orange-400',
+  },
+  neonCyan: {
+    container: 'bg-slate-950 border-cyan-400/50 shadow-[0_0_30px_rgba(34,211,238,0.3)] text-cyan-100',
+    header: 'bg-slate-950 border-cyan-400/30 text-cyan-400',
+    display: 'bg-slate-950 text-cyan-400 border-b border-cyan-400/30 shadow-[inset_0_0_20px_rgba(34,211,238,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-cyan-100 hover:bg-cyan-950 border border-cyan-400/30 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(34,211,238,0.5)]',
+    btnOp: 'bg-cyan-950 text-cyan-400 hover:bg-cyan-900 border border-cyan-400/50 hover:shadow-[0_0_15px_rgba(34,211,238,0.6)]',
+    btnOpActive: 'bg-cyan-400 text-slate-900 shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(34,211,238,0.8)] border-cyan-300',
+    btnAction: 'bg-slate-900 text-cyan-300 hover:bg-cyan-950 border border-cyan-400/30 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(34,211,238,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-cyan-400 text-slate-900 hover:bg-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.8)] border-cyan-300',
+  },
+  neonPurple: {
+    container: 'bg-slate-950 border-purple-500/50 shadow-[0_0_30px_rgba(168,85,247,0.3)] text-purple-100',
+    header: 'bg-slate-950 border-purple-500/30 text-purple-400',
+    display: 'bg-slate-950 text-purple-400 border-b border-purple-500/30 shadow-[inset_0_0_20px_rgba(168,85,247,0.1)]',
+    keypad: 'bg-slate-950',
+    btnNum: 'bg-slate-900 text-purple-100 hover:bg-purple-950 border border-purple-500/30 hover:border-purple-500 hover:shadow-[0_0_15px_rgba(168,85,247,0.5)]',
+    btnOp: 'bg-purple-950 text-purple-400 hover:bg-purple-900 border border-purple-500/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.6)]',
+    btnOpActive: 'bg-purple-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.5),0_0_20px_rgba(168,85,247,0.8)] border-purple-400',
+    btnAction: 'bg-slate-900 text-purple-300 hover:bg-purple-950 border border-purple-500/30 hover:border-purple-500 hover:shadow-[0_0_15px_rgba(168,85,247,0.5)]',
+    btnDanger: 'bg-red-950 text-red-400 hover:bg-red-900 border border-red-500/50 hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]',
+    btnEquals: 'bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.8)] border-purple-400',
+  }
+};
+
+export function Calculator({ onClose }: CalculatorProps) {
+  const [display, setDisplay] = useState('0');
+  const [previousValue, setPreviousValue] = useState<number | null>(null);
+  const [operator, setOperator] = useState<string | null>(null);
+  const [waitingForNewValue, setWaitingForNewValue] = useState(false);
+  const [position, setPosition] = useState({ x: window.innerWidth - 340, y: window.innerHeight - 500 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [theme, setTheme] = useState<Theme>('light');
+  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+
+  // Handle dragging
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !dragRef.current) return;
+      
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      
+      setPosition({
+        x: Math.max(0, Math.min(window.innerWidth - 320, dragRef.current.initialX + dx)), // 320 is w-80
+        y: Math.max(0, Math.min(window.innerHeight - 450, dragRef.current.initialY + dy))
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: position.x,
+      initialY: position.y
+    };
+  };
+
+  const cycleTheme = () => {
+    const themeKeys = Object.keys(themes) as Theme[];
+    let nextTheme = themeKeys[Math.floor(Math.random() * themeKeys.length)];
+    while (nextTheme === theme && themeKeys.length > 1) {
+      nextTheme = themeKeys[Math.floor(Math.random() * themeKeys.length)];
+    }
+    setTheme(nextTheme);
+  };
+
+  const inputDigit = (digit: string) => {
+    if (waitingForNewValue) {
+      setDisplay(digit);
+      setWaitingForNewValue(false);
+    } else {
+      setDisplay(display === '0' ? digit : display + digit);
+    }
+  };
+
+  const inputDecimal = () => {
+    if (waitingForNewValue) {
+      setDisplay('0.');
+      setWaitingForNewValue(false);
+      return;
+    }
+    if (!display.includes('.')) {
+      setDisplay(display + '.');
+    }
+  };
+
+  const clear = () => {
+    setDisplay('0');
+    setPreviousValue(null);
+    setOperator(null);
+    setWaitingForNewValue(false);
+  };
+
+  const backspace = () => {
+    if (waitingForNewValue) return;
+    setDisplay(display.length > 1 ? display.slice(0, -1) : '0');
+  };
+
+  const performOperation = (nextOperator: string) => {
+    const inputValue = parseFloat(display);
+
+    if (previousValue == null) {
+      setPreviousValue(inputValue);
+    } else if (operator) {
+      const currentValue = previousValue || 0;
+      let newValue = currentValue;
+
+      if (operator === '+') newValue = currentValue + inputValue;
+      else if (operator === '-') newValue = currentValue - inputValue;
+      else if (operator === '*') newValue = currentValue * inputValue;
+      else if (operator === '/') newValue = currentValue / inputValue;
+
+      setPreviousValue(newValue);
+      setDisplay(String(newValue));
+    }
+
+    setWaitingForNewValue(true);
+    setOperator(nextOperator);
+  };
+
+  // Keyboard support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') inputDigit(e.key);
+      if (e.key === '.') inputDecimal();
+      if (e.key === '=' || e.key === 'Enter') {
+        e.preventDefault();
+        performOperation('=');
+      }
+      if (e.key === 'Backspace') backspace();
+      if (e.key === 'Escape') clear();
+      if (['+', '-', '*', '/'].includes(e.key)) performOperation(e.key);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [display, previousValue, operator, waitingForNewValue]);
+
+  const t = themes[theme];
+
+  const getOpClass = (op: string) => {
+    return operator === op && waitingForNewValue ? t.btnOpActive : t.btnOp;
+  };
+
+  return (
+    <div 
+      className={`fixed w-80 rounded-3xl overflow-hidden flex flex-col transition-colors duration-300 border ${t.container}`}
+      style={{ left: `${position.x}px`, top: `${position.y}px` }}
+    >
+      {/* Header */}
+      <div 
+        className={`px-4 py-3 border-b flex justify-between items-center cursor-move select-none transition-colors duration-300 ${t.header}`}
+        onMouseDown={handleMouseDown}
+      >
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={(e) => { e.stopPropagation(); cycleTheme(); }}
+            className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+            title="Changer le thème"
+          >
+            <Palette size={16} />
+          </button>
+          <h3 className="font-bold text-sm tracking-wide uppercase opacity-80">Calculatrice</h3>
+        </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onClose(); }} 
+          className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      
+      {/* Display */}
+      <div className={`p-6 text-right text-4xl font-light overflow-hidden text-ellipsis tracking-wider transition-colors duration-300 ${t.display}`}>
+        {display}
+      </div>
+
+      {/* Keypad */}
+      <div className={`grid grid-cols-4 gap-2 p-4 transition-colors duration-300 ${t.keypad}`}>
+        <button onClick={clear} className={`col-span-2 p-4 text-lg font-semibold rounded-2xl transition-all active:scale-95 ${t.btnDanger}`}>C</button>
+        <button onClick={backspace} className={`p-4 text-lg font-semibold rounded-2xl flex justify-center items-center transition-all active:scale-95 ${t.btnAction}`}><Delete size={20} /></button>
+        <button onClick={() => performOperation('/')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${getOpClass('/')}`}>÷</button>
+
+        <button onClick={() => inputDigit('7')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>7</button>
+        <button onClick={() => inputDigit('8')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>8</button>
+        <button onClick={() => inputDigit('9')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>9</button>
+        <button onClick={() => performOperation('*')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${getOpClass('*')}`}>×</button>
+
+        <button onClick={() => inputDigit('4')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>4</button>
+        <button onClick={() => inputDigit('5')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>5</button>
+        <button onClick={() => inputDigit('6')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>6</button>
+        <button onClick={() => performOperation('-')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${getOpClass('-')}`}>-</button>
+
+        <button onClick={() => inputDigit('1')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>1</button>
+        <button onClick={() => inputDigit('2')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>2</button>
+        <button onClick={() => inputDigit('3')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>3</button>
+        <button onClick={() => performOperation('+')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${getOpClass('+')}`}>+</button>
+
+        <button onClick={() => inputDigit('0')} className={`col-span-2 p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>0</button>
+        <button onClick={inputDecimal} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>.</button>
+        <button onClick={() => performOperation('=')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnEquals}`}>=</button>
+      </div>
+    </div>
+  );
+}
