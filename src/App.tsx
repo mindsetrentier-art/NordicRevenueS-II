@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Layout } from './components/Layout';
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="settings" element={<Settings />} />
               </Route>
             </Routes>
+            <SpeedInsights />
           </Router>
         </AuthProvider>
       </ThemeProvider>
