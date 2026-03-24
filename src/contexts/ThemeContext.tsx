@@ -40,12 +40,25 @@ export const THEME_COLORS = [
   '#e879f9', '#d946ef', '#c026d3', '#a21caf', '#86198f',
   // Pink
   '#f472b6', '#ec4899', '#db2777', '#be185d', '#9d174d',
+  // Black & White
+  '#ffffff', '#000000',
+  // Fluo / Flashy
+  '#ff00ff', '#00ff00', '#00ffff', '#ffff00', '#ff0000', '#ff00aa', '#ccff00', '#00ffcc'
 ];
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeColor, setThemeColor] = useState(() => {
     return localStorage.getItem('app_theme_color') || '#2563eb';
   });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const randomColor = THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
+      setThemeColor(randomColor);
+    }, 2 * 60 * 1000); // 2 minutes
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('app_theme_color', themeColor);

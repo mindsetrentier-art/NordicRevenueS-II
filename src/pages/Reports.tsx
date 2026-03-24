@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns } from 'lucide-react';
+import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -360,6 +360,7 @@ export function Reports() {
     const displayDate = format(day, 'dd MMM', { locale: fr });
     
     const currentDayRevs = revenues.filter(r => r.date === dateStr);
+    const hasEntries = currentDayRevs.length > 0;
     const total = currentDayRevs.reduce((sum, r) => sum + r.total, 0);
     const cb = currentDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
     const cash = currentDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
@@ -373,6 +374,7 @@ export function Reports() {
     let compTr = undefined;
     let compAmex = undefined;
     let compTransfer = undefined;
+    let compHasEntries = undefined;
 
     if (compareMode !== 'none') {
       let compDateStr = '';
@@ -390,6 +392,7 @@ export function Reports() {
       
       if (compDateStr) {
         const compDayRevs = compRevenues.filter(r => r.date === compDateStr);
+        compHasEntries = compDayRevs.length > 0;
         compTotal = compDayRevs.reduce((sum, r) => sum + r.total, 0);
         compCb = compDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
         compCash = compDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
@@ -402,12 +405,14 @@ export function Reports() {
     return {
       date: displayDate,
       fullDate: dateStr,
+      hasEntries,
       total,
       cb,
       cash,
       tr,
       amex,
       transfer,
+      compHasEntries,
       compTotal,
       compCb,
       compCash,
@@ -796,9 +801,15 @@ Généré par NordicRevenueS`;
                   />
                   <Tooltip 
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number, name: string) => {
+                    formatter={(value: number, name: string, props: any) => {
+                      if (name === 'Période Actuelle' && props.payload.hasEntries === false) {
+                        return ['Aucune saisie', name];
+                      }
+                      if (name === 'Comparaison' && props.payload.compHasEntries === false) {
+                        return ['Aucune saisie', name];
+                      }
                       if (name === 'compTotal') return [`${value.toFixed(2)} €`, 'Comparaison'];
-                      return [`${value.toFixed(2)} €`, 'Total'];
+                      return [`${value.toFixed(2)} €`, name === 'total' ? 'Total' : name];
                     }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
@@ -808,7 +819,16 @@ Généré par NordicRevenueS`;
                     name="Période Actuelle"
                     stroke="#2563eb" 
                     strokeWidth={3}
-                    dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
+                    dot={(props: any) => {
+                      const { cx, cy, payload, value } = props;
+                      if (value === undefined || value === null) return null;
+                      if (payload.hasEntries === false) {
+                        return (
+                          <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={5} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+                        );
+                      }
+                      return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={4} fill="#2563eb" stroke="#fff" strokeWidth={2} />;
+                    }}
                     activeDot={{ r: 6 }}
                   />
                   {compareMode !== 'none' && (
@@ -819,7 +839,16 @@ Généré par NordicRevenueS`;
                       stroke="#94a3b8" 
                       strokeWidth={3}
                       strokeDasharray="5 5"
-                      dot={{ r: 4, fill: '#94a3b8', strokeWidth: 2, stroke: '#fff' }}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, value } = props;
+                        if (value === undefined || value === null) return null;
+                        if (payload.compHasEntries === false) {
+                          return (
+                            <circle key={`comp-dot-${payload.date}`} cx={cx} cy={cy} r={5} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+                          );
+                        }
+                        return <circle key={`comp-dot-${payload.date}`} cx={cx} cy={cy} r={4} fill="#94a3b8" stroke="#fff" strokeWidth={2} />;
+                      }}
                       activeDot={{ r: 6 }}
                     />
                   )}

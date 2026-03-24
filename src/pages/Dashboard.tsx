@@ -12,7 +12,10 @@ import {
   Banknote, 
   Receipt,
   ArrowRight,
-  Bell
+  Bell,
+  Store,
+  Clock,
+  ChevronDown
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -319,25 +322,41 @@ export function Dashboard() {
               className="text-sm text-slate-700 outline-none bg-transparent"
             />
           </div>
-          <select
-            value={selectedEst}
-            onChange={(e) => setSelectedEst(e.target.value)}
-            className="bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
-          >
-            <option value="all">Tous les établissements</option>
-            {establishments.map(est => (
-              <option key={est.id} value={est.id}>{est.name}</option>
-            ))}
-          </select>
-          <select
-            value={selectedService}
-            onChange={(e) => setSelectedService(e.target.value)}
-            className="bg-white border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
-          >
-            <option value="all">Tous les services</option>
-            <option value="midi">Midi</option>
-            <option value="soir">Soir</option>
-          </select>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Store size={16} className="text-slate-400" />
+            </div>
+            <select
+              value={selectedEst}
+              onChange={(e) => setSelectedEst(e.target.value)}
+              className="bg-white border border-slate-200 text-slate-700 rounded-xl pl-10 pr-10 py-2.5 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow appearance-none"
+            >
+              <option value="all">Tous les établissements</option>
+              {establishments.map(est => (
+                <option key={est.id} value={est.id}>{est.name}</option>
+              ))}
+            </select>
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <ChevronDown size={16} className="text-slate-400" />
+            </div>
+          </div>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Clock size={16} className="text-slate-400" />
+            </div>
+            <select
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              className="bg-white border border-slate-200 text-slate-700 rounded-xl pl-10 pr-10 py-2.5 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow appearance-none"
+            >
+              <option value="all">Tous les services</option>
+              <option value="midi">Midi</option>
+              <option value="soir">Soir</option>
+            </select>
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <ChevronDown size={16} className="text-slate-400" />
+            </div>
+          </div>
         </div>
       </div>
 

@@ -15,10 +15,14 @@ import {
   CheckCircle2,
   Sun,
   Moon,
-  Calculator as CalculatorIcon
+  Calculator as CalculatorIcon,
+  Mic,
+  MicOff,
+  MessageSquare
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Calculator } from '../components/Calculator';
+import { RevenueHistory } from '../components/RevenueHistory';
 
 const INITIAL_PAYMENTS: Payments = {
   cb: 0,
@@ -39,6 +43,8 @@ export function RevenueEntry() {
   
   const [paymentsMidi, setPaymentsMidi] = useState<Payments>(INITIAL_PAYMENTS);
   const [paymentsSoir, setPaymentsSoir] = useState<Payments>(INITIAL_PAYMENTS);
+  const [notesMidi, setNotesMidi] = useState('');
+  const [notesSoir, setNotesSoir] = useState('');
 
   const [activeMethods, setActiveMethods] = useState<Record<keyof Payments, boolean>>(() => {
     const saved = localStorage.getItem('activePaymentMethods');
@@ -63,6 +69,7 @@ export function RevenueEntry() {
   const [isMidiActive, setIsMidiActive] = useState(true);
   const [isSoirActive, setIsSoirActive] = useState(true);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('activePaymentMethods', JSON.stringify(activeMethods));
@@ -138,6 +145,7 @@ export function RevenueEntry() {
           service: 'midi',
           payments: paymentsMidi,
           total: totalMidi,
+          notes: notesMidi.trim(),
           createdBy: userProfile.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -151,6 +159,7 @@ export function RevenueEntry() {
           service: 'soir',
           payments: paymentsSoir,
           total: totalSoir,
+          notes: notesSoir.trim(),
           createdBy: userProfile.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -162,6 +171,9 @@ export function RevenueEntry() {
       setSuccess(true);
       setPaymentsMidi(INITIAL_PAYMENTS);
       setPaymentsSoir(INITIAL_PAYMENTS);
+      setNotesMidi('');
+      setNotesSoir('');
+      setRefreshTrigger(prev => prev + 1);
       setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'revenues');
@@ -227,13 +239,18 @@ export function RevenueEntry() {
             icon={<Sun className="text-amber-500" size={24} />}
             payments={paymentsMidi}
             setPayments={setPaymentsMidi}
+            notes={notesMidi}
+            setNotes={setNotesMidi}
             activeMethods={activeMethods}
             onToggleMethod={handleToggleMethod}
             total={totalMidi}
             isActive={isMidiActive}
             onToggleActive={() => {
               setIsMidiActive(!isMidiActive);
-              if (isMidiActive) setPaymentsMidi(INITIAL_PAYMENTS);
+              if (isMidiActive) {
+                setPaymentsMidi(INITIAL_PAYMENTS);
+                setNotesMidi('');
+              }
             }}
           />
 
@@ -243,13 +260,18 @@ export function RevenueEntry() {
             icon={<Moon className="text-indigo-500" size={24} />}
             payments={paymentsSoir}
             setPayments={setPaymentsSoir}
+            notes={notesSoir}
+            setNotes={setNotesSoir}
             activeMethods={activeMethods}
             onToggleMethod={handleToggleMethod}
             total={totalSoir}
             isActive={isSoirActive}
             onToggleActive={() => {
               setIsSoirActive(!isSoirActive);
-              if (isSoirActive) setPaymentsSoir(INITIAL_PAYMENTS);
+              if (isSoirActive) {
+                setPaymentsSoir(INITIAL_PAYMENTS);
+                setNotesSoir('');
+              }
             }}
           />
         </div>
@@ -286,6 +308,8 @@ export function RevenueEntry() {
       {isCalculatorOpen && (
         <Calculator onClose={() => setIsCalculatorOpen(false)} />
       )}
+
+      <RevenueHistory establishmentId={selectedEst} refreshTrigger={refreshTrigger} />
     </div>
   );
 }
@@ -295,6 +319,8 @@ function ServiceSection({
   icon,
   payments,
   setPayments,
+  notes,
+  setNotes,
   activeMethods,
   onToggleMethod,
   total,
@@ -305,6 +331,8 @@ function ServiceSection({
   icon: React.ReactNode;
   payments: Payments;
   setPayments: React.Dispatch<React.SetStateAction<Payments>>;
+  notes: string;
+  setNotes: React.Dispatch<React.SetStateAction<string>>;
   activeMethods: Record<keyof Payments, boolean>;
   onToggleMethod: (field: keyof Payments) => void;
   total: number;
@@ -440,6 +468,20 @@ function ServiceSection({
             />
           </div>
         </div>
+
+        {/* Notes */}
+        <div className="pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
+            <MessageSquare className="text-slate-500" size={16} /> Notes (Optionnel)
+          </h3>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={!isActive}
+            placeholder="Ajoutez un commentaire sur ce service..."
+            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </div>
       </div>
     </div>
   );
@@ -460,6 +502,51 @@ function PaymentInput({
   isActive: boolean,
   onToggle: () => void
 }) {
+  const [isListening, setIsListening] = useState(false);
+
+  const startListening = () => {
+    if (!isActive) return;
+    
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      const cleaned = transcript.replace(/\s/g, '').replace(',', '.');
+      const match = cleaned.match(/\d+(\.\d+)?/);
+      if (match) {
+        onChange(match[0]);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      if (event.error === 'not-allowed') {
+        alert("L'accès au microphone a été refusé. Veuillez autoriser l'accès au microphone dans les paramètres de votre navigateur pour utiliser cette fonctionnalité.");
+      }
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
   return (
     <div className={`flex flex-col group ${!isActive ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 ml-1">
@@ -472,7 +559,7 @@ function PaymentInput({
           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-4' : 'translate-x-1'}`} />
         </button>
       </div>
-      <div className={`flex w-full items-stretch rounded-xl border-2 ${isActive ? 'border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:bg-white' : 'border-slate-200 bg-slate-100'} transition-all shadow-sm overflow-hidden`}>
+      <div className={`flex w-full items-stretch rounded-xl border-2 ${isActive ? (isListening ? 'border-blue-500 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:bg-white') : 'border-slate-200 bg-slate-100'} transition-all shadow-sm overflow-hidden`}>
         <span className="flex items-center pl-4 text-slate-400 font-bold">€</span>
         <input 
           type="number" 
@@ -481,10 +568,19 @@ function PaymentInput({
           disabled={!isActive}
           value={value === 0 ? '' : value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="0.00"
+          placeholder={isListening ? "Écoute..." : "0.00"}
           className="w-full border-none bg-transparent h-12 text-lg font-bold text-slate-900 focus:ring-0 placeholder:text-slate-300 px-2 disabled:text-slate-400"
         />
-        <div className="flex items-center px-4 text-slate-400 bg-slate-100/50 border-l border-slate-200">
+        <button
+          type="button"
+          onClick={startListening}
+          disabled={!isActive}
+          className={`flex items-center px-3 transition-colors border-l border-slate-200 ${isListening ? 'bg-blue-50 text-blue-600' : 'bg-slate-100/50 text-slate-400 hover:text-blue-600 hover:bg-slate-100'}`}
+          title="Saisie vocale"
+        >
+          <Mic className={isListening ? 'animate-pulse' : ''} size={18} />
+        </button>
+        <div className="flex items-center px-3 text-slate-400 bg-slate-100/50 border-l border-slate-200">
           {icon}
         </div>
       </div>

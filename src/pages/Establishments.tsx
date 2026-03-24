@@ -113,7 +113,31 @@ export function Establishments() {
     }
     
     try {
+      // Delete associated revenues
+      const revenuesQuery = query(collection(db, 'revenues'), where('establishmentId', '==', estToDelete.id));
+      const revenuesSnap = await getDocs(revenuesQuery);
+      const deleteRevenuesPromises = revenuesSnap.docs.map(docSnap => deleteDoc(doc(db, 'revenues', docSnap.id)));
+      await Promise.all(deleteRevenuesPromises);
+
+      // Delete associated alerts
+      const alertsQuery = query(collection(db, 'alerts'), where('establishmentId', '==', estToDelete.id));
+      const alertsSnap = await getDocs(alertsQuery);
+      const deleteAlertsPromises = alertsSnap.docs.map(docSnap => deleteDoc(doc(db, 'alerts', docSnap.id)));
+      await Promise.all(deleteAlertsPromises);
+
+      // Remove establishmentId from users
+      const usersQuery = query(collection(db, 'users'), where('establishmentIds', 'array-contains', estToDelete.id));
+      const usersSnap = await getDocs(usersQuery);
+      const updateUsersPromises = usersSnap.docs.map(docSnap => {
+        const userData = docSnap.data();
+        const updatedEstIds = (userData.establishmentIds || []).filter((id: string) => id !== estToDelete.id);
+        return updateDoc(doc(db, 'users', docSnap.id), { establishmentIds: updatedEstIds });
+      });
+      await Promise.all(updateUsersPromises);
+
+      // Finally delete the establishment
       await deleteDoc(doc(db, 'establishments', estToDelete.id));
+      
       setIsDeleteModalOpen(false);
       setEstToDelete(null);
       fetchEstablishments();

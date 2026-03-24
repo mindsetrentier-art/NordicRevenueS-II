@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { User, Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Settings as SettingsIcon, Users, Shield, Building2, Check, X } from 'lucide-react';
+import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 export function Settings() {
@@ -144,8 +144,17 @@ export function Settings() {
     if (userProfile?.role !== 'admin' || !userToDelete || userToDelete.uid === userProfile.uid) return;
     
     try {
-      const { deleteDoc } = await import('firebase/firestore');
+      const { deleteDoc, collection, query, where, getDocs } = await import('firebase/firestore');
+      
+      // Delete user's alerts
+      const alertsQuery = query(collection(db, 'alerts'), where('userId', '==', userToDelete.uid));
+      const alertsSnap = await getDocs(alertsQuery);
+      const deleteAlertsPromises = alertsSnap.docs.map(docSnap => deleteDoc(doc(db, 'alerts', docSnap.id)));
+      await Promise.all(deleteAlertsPromises);
+
+      // Delete the user
       await deleteDoc(doc(db, 'users', userToDelete.uid));
+      
       setUsers(users.filter(u => u.uid !== userToDelete.uid));
       setUserToDelete(null);
     } catch (error) {
@@ -515,24 +524,30 @@ export function Settings() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-6">
-              <h2 className="text-xl font-bold text-slate-900 mb-2">Supprimer l'utilisateur</h2>
-              <p className="text-slate-600">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-4 mx-auto">
+                <Trash2 size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 text-center mb-2">
+                Supprimer l'utilisateur
+              </h2>
+              <p className="text-slate-500 text-center mb-6">
                 Êtes-vous sûr de vouloir supprimer l'utilisateur <strong className="text-slate-900">{userToDelete.email}</strong> ? Cette action est irréversible.
               </p>
-            </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-              <button
-                onClick={() => setUserToDelete(null)}
-                className="flex-1 bg-white border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDeleteUser}
-                className="flex-1 bg-red-600 text-white font-bold py-2.5 rounded-xl hover:bg-red-700 transition-colors"
-              >
-                Supprimer
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setUserToDelete(null)}
+                  className="flex-1 bg-white border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  className="flex-1 bg-red-600 text-white font-bold py-2.5 rounded-xl hover:bg-red-700 transition-colors"
+                >
+                  Supprimer
+                </button>
+              </div>
             </div>
           </div>
         </div>

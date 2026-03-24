@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertRule, Establishment, AlertType, Payments } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Bell, Plus, Edit2, Trash2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { Bell, Plus, Edit2, Trash2, AlertTriangle, CheckCircle2, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import clsx from 'clsx';
 
 export function Alerts() {
@@ -14,6 +14,8 @@ export function Alerts() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [alertToDelete, setAlertToDelete] = useState<string | null>(null);
   const [editingAlert, setEditingAlert] = useState<AlertRule | null>(null);
 
   // Form state
@@ -130,14 +132,21 @@ export function Alerts() {
     }
   };
 
-  const deleteAlert = async (id: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette alerte ?')) return;
+  const confirmDelete = async () => {
+    if (!alertToDelete) return;
     try {
-      await deleteDoc(doc(db, 'alerts', id));
+      await deleteDoc(doc(db, 'alerts', alertToDelete));
+      setIsDeleteModalOpen(false);
+      setAlertToDelete(null);
       fetchData();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `alerts/${id}`);
+      handleFirestoreError(error, OperationType.DELETE, `alerts/${alertToDelete}`);
     }
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setAlertToDelete(id);
+    setIsDeleteModalOpen(true);
   };
 
   const toggleAlertStatus = async (alert: AlertRule) => {
@@ -161,6 +170,68 @@ export function Alerts() {
     tr: 'Ticket Restaurant',
     trContactless: 'TR Sans Contact',
     transfer: 'Virement'
+  };
+
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const sortedAlerts = useMemo(() => {
+    let sortableAlerts = [...alerts];
+    if (sortConfig !== null) {
+      sortableAlerts.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortConfig.key) {
+          case 'name':
+            aValue = a.name.toLowerCase();
+            bValue = b.name.toLowerCase();
+            break;
+          case 'type':
+            aValue = a.type;
+            bValue = b.type;
+            break;
+          case 'establishment':
+            aValue = a.establishmentId === 'all' ? 'Tous les établissements' : establishments.find(e => e.id === a.establishmentId)?.name?.toLowerCase() || '';
+            bValue = b.establishmentId === 'all' ? 'Tous les établissements' : establishments.find(e => e.id === b.establishmentId)?.name?.toLowerCase() || '';
+            break;
+          case 'isActive':
+            aValue = a.isActive ? 1 : 0;
+            bValue = b.isActive ? 1 : 0;
+            break;
+          case 'createdAt':
+            aValue = (a.createdAt as any)?.toMillis?.() || 0;
+            bValue = (b.createdAt as any)?.toMillis?.() || 0;
+            break;
+          default:
+            aValue = 0;
+            bValue = 0;
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableAlerts;
+  }, [alerts, sortConfig, establishments]);
+
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (columnName: string) => {
+    if (!sortConfig || sortConfig.key !== columnName) {
+      return <ArrowUpDown size={14} className="text-slate-400" />;
+    }
+    return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />;
   };
 
   return (
@@ -197,86 +268,156 @@ export function Alerts() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {alerts.map(alert => (
-            <div key={alert.id} className={clsx(
-              "bg-white rounded-2xl border p-6 shadow-sm transition-all",
-              alert.isActive ? "border-slate-200" : "border-slate-200 opacity-60"
-            )}>
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={clsx(
-                    "p-2 rounded-xl",
-                    alert.type === 'revenue_drop' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
-                  )}>
-                    {alert.type === 'revenue_drop' ? <AlertTriangle size={20} /> : <Bell size={20} />}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900">{alert.name}</h3>
-                    <p className="text-xs text-slate-500">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('name')}>
+                    <div className="flex items-center gap-2">
+                      Nom {getSortIcon('name')}
+                    </div>
+                  </th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('type')}>
+                    <div className="flex items-center gap-2">
+                      Type {getSortIcon('type')}
+                    </div>
+                  </th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('establishment')}>
+                    <div className="flex items-center gap-2">
+                      Établissement {getSortIcon('establishment')}
+                    </div>
+                  </th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('isActive')}>
+                    <div className="flex items-center gap-2">
+                      Statut {getSortIcon('isActive')}
+                    </div>
+                  </th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('createdAt')}>
+                    <div className="flex items-center gap-2">
+                      Date de création {getSortIcon('createdAt')}
+                    </div>
+                  </th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sortedAlerts.map(alert => (
+                  <tr key={alert.id} className={clsx("hover:bg-slate-50 transition-colors", !alert.isActive && "opacity-60")}>
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={clsx(
+                          "p-2 rounded-xl shrink-0",
+                          alert.type === 'revenue_drop' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
+                        )}>
+                          {alert.type === 'revenue_drop' ? <AlertTriangle size={16} /> : <Bell size={16} />}
+                        </div>
+                        <span className="font-bold text-slate-900">{alert.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-900">
+                          {alert.type === 'revenue_drop' ? 'Baisse de CA' : 'Variation Paiement'}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {alert.type === 'revenue_drop' ? `< ${alert.threshold} €` : `> ${alert.threshold} %`}
+                          {alert.type === 'payment_method_change' && alert.paymentMethod && ` (${paymentMethodLabels[alert.paymentMethod] || alert.paymentMethod})`}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-4 text-sm text-slate-600">
                       {alert.establishmentId === 'all' 
                         ? 'Tous les établissements' 
                         : establishments.find(e => e.id === alert.establishmentId)?.name || 'Établissement inconnu'}
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => toggleAlertStatus(alert)}
-                  className={clsx(
-                    "p-1.5 rounded-lg transition-colors",
-                    alert.isActive ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-400 hover:bg-slate-100"
-                  )}
-                  title={alert.isActive ? "Désactiver" : "Activer"}
-                >
-                  <CheckCircle2 size={20} />
-                </button>
-              </div>
+                    </td>
+                    <td className="p-4">
+                      <button 
+                        onClick={() => toggleAlertStatus(alert)}
+                        className={clsx(
+                          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors",
+                          alert.isActive ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        )}
+                        title={alert.isActive ? "Désactiver" : "Activer"}
+                      >
+                        {alert.isActive ? (
+                          <>
+                            <CheckCircle2 size={12} /> Actif
+                          </>
+                        ) : (
+                          <>
+                            <X size={12} /> Inactif
+                          </>
+                        )}
+                      </button>
+                    </td>
+                    <td className="p-4 text-sm text-slate-600">
+                      {alert.createdAt ? new Date((alert.createdAt as any).toMillis ? (alert.createdAt as any).toMillis() : alert.createdAt).toLocaleDateString('fr-FR') : '-'}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => openModal(alert)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Modifier"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteClick(alert.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-              <div className="space-y-2 mb-6">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Type</span>
-                  <span className="font-medium text-slate-900">
-                    {alert.type === 'revenue_drop' ? 'Baisse de CA' : 'Variation Paiement'}
-                  </span>
-                </div>
-                {alert.type === 'payment_method_change' && alert.paymentMethod && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Moyen</span>
-                    <span className="font-medium text-slate-900">{paymentMethodLabels[alert.paymentMethod] || alert.paymentMethod}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Seuil</span>
-                  <span className="font-medium text-rose-600">
-                    {alert.type === 'revenue_drop' ? `< ${alert.threshold} €` : `> ${alert.threshold} %`}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Fréquence</span>
-                  <span className="font-medium text-slate-900">
-                    {alert.timeframe === 'daily' ? 'Quotidienne' : alert.timeframe === 'weekly' ? 'Hebdomadaire' : 'Mensuelle'}
-                  </span>
-                </div>
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-4 mx-auto">
+                <Trash2 size={24} />
               </div>
-
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-                <button 
-                  onClick={() => openModal(alert)}
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Modifier"
+              <h2 className="text-xl font-bold text-slate-900 text-center mb-2">
+                Supprimer l'alerte
+              </h2>
+              <p className="text-slate-500 text-center mb-6">
+                Êtes-vous sûr de vouloir supprimer cette alerte ? Cette action est irréversible.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setAlertToDelete(null);
+                  }}
+                  className="flex-1 bg-white border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
                 >
-                  <Edit2 size={16} />
+                  Annuler
                 </button>
-                <button 
-                  onClick={() => deleteAlert(alert.id)}
-                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                  title="Supprimer"
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="flex-1 bg-red-600 text-white font-bold py-2.5 rounded-xl hover:bg-red-700 transition-colors"
                 >
-                  <Trash2 size={16} />
+                  Supprimer
                 </button>
               </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
 

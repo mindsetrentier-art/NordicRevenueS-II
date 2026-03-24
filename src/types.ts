@@ -38,6 +38,7 @@ export interface Revenue {
   service?: 'midi' | 'soir';
   payments: Payments;
   total: number;
+  notes?: string;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
