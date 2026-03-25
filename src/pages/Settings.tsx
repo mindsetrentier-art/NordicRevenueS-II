@@ -25,6 +25,7 @@ export function Settings() {
   const [editRole, setEditRole] = useState<'admin' | 'manager'>('manager');
   const [editEstIds, setEditEstIds] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConfirmUpdateModalOpen, setIsConfirmUpdateModalOpen] = useState(false);
 
   // Create User State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -68,8 +69,13 @@ export function Settings() {
     setIsModalOpen(true);
   };
 
-  const handleUpdateUser = async (e: React.FormEvent) => {
+  const handleUpdateUser = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingUser || userProfile?.role !== 'admin') return;
+    setIsConfirmUpdateModalOpen(true);
+  };
+
+  const executeUpdateUser = async () => {
     if (!editingUser || userProfile?.role !== 'admin') return;
 
     try {
@@ -81,6 +87,7 @@ export function Settings() {
       
       // Update local state
       setUsers(users.map(u => u.uid === editingUser.uid ? { ...u, role: editRole, establishmentIds: editEstIds } : u));
+      setIsConfirmUpdateModalOpen(false);
       setIsModalOpen(false);
       setEditingUser(null);
     } catch (error) {
@@ -519,6 +526,40 @@ export function Settings() {
           </div>
         </div>
       )}
+      {/* Confirm Update Modal */}
+      {isConfirmUpdateModalOpen && editingUser && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mb-4 mx-auto">
+                <Users size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 text-center mb-2">
+                Confirmer les modifications
+              </h2>
+              <p className="text-slate-500 text-center mb-6">
+                Êtes-vous sûr de vouloir appliquer ces modifications à l'utilisateur <strong className="text-slate-900">{editingUser.email}</strong> ?
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsConfirmUpdateModalOpen(false)}
+                  className="flex-1 bg-white border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={executeUpdateUser}
+                  className="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  Confirmer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete User Modal */}
       {userToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">

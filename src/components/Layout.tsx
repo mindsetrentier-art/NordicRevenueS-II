@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import clsx from 'clsx';
+import { Logo } from './Logo';
 
 import { MusicPlayer } from './MusicPlayer';
 
@@ -49,9 +50,7 @@ export function Layout() {
       {/* Mobile Header */}
       <header className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">
-          <div className="bg-blue-600 p-1.5 rounded-lg text-white">
-            <BarChart3 size={20} />
-          </div>
+          <Logo className="w-8 h-8 rounded-lg shadow-sm" />
           <h1 className="font-bold text-lg tracking-tight">NordicRevenueS</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -68,9 +67,7 @@ export function Layout() {
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 hidden md:flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-sm">
-            <BarChart3 size={24} />
-          </div>
+          <Logo className="w-10 h-10 rounded-xl shadow-md" />
           <h1 className="font-bold text-xl tracking-tight text-slate-900">NordicRevenueS</h1>
         </div>
 

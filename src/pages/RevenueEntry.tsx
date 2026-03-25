@@ -18,7 +18,9 @@ import {
   Calculator as CalculatorIcon,
   Mic,
   MicOff,
-  MessageSquare
+  MessageSquare,
+  Check,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Calculator } from '../components/Calculator';
@@ -130,7 +132,7 @@ export function RevenueEntry() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEst || !userProfile || totalJournee === 0) return;
+    if (!selectedEst || !userProfile) return;
     
     setLoading(true);
     setSuccess(false);
@@ -138,7 +140,7 @@ export function RevenueEntry() {
     try {
       const promises = [];
       
-      if (isMidiActive && totalMidi > 0) {
+      if (isMidiActive) {
         promises.push(addDoc(collection(db, 'revenues'), {
           establishmentId: selectedEst,
           date,
@@ -152,7 +154,7 @@ export function RevenueEntry() {
         }));
       }
 
-      if (isSoirActive && totalSoir > 0) {
+      if (isSoirActive) {
         promises.push(addDoc(collection(db, 'revenues'), {
           establishmentId: selectedEst,
           date,
@@ -166,7 +168,9 @@ export function RevenueEntry() {
         }));
       }
 
-      await Promise.all(promises);
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
       
       setSuccess(true);
       setPaymentsMidi(INITIAL_PAYMENTS);
@@ -292,7 +296,7 @@ export function RevenueEntry() {
             )}
             <button
               type="submit"
-              disabled={loading || totalJournee === 0 || !selectedEst}
+              disabled={loading || !selectedEst || (!isMidiActive && !isSoirActive)}
               className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-blue-600/20"
             >
               {loading ? 'Enregistrement...' : (
@@ -503,6 +507,7 @@ function PaymentInput({
   onToggle: () => void
 }) {
   const [isListening, setIsListening] = useState(false);
+  const [detectedAmount, setDetectedAmount] = useState<string | null>(null);
 
   const startListening = () => {
     if (!isActive) return;
@@ -521,6 +526,7 @@ function PaymentInput({
 
     recognition.onstart = () => {
       setIsListening(true);
+      setDetectedAmount(null);
     };
 
     recognition.onresult = (event: any) => {
@@ -528,7 +534,7 @@ function PaymentInput({
       const cleaned = transcript.replace(/\s/g, '').replace(',', '.');
       const match = cleaned.match(/\d+(\.\d+)?/);
       if (match) {
-        onChange(match[0]);
+        setDetectedAmount(match[0]);
       }
     };
 
@@ -559,7 +565,36 @@ function PaymentInput({
           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-4' : 'translate-x-1'}`} />
         </button>
       </div>
-      <div className={`flex w-full items-stretch rounded-xl border-2 ${isActive ? (isListening ? 'border-blue-500 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:bg-white') : 'border-slate-200 bg-slate-100'} transition-all shadow-sm overflow-hidden`}>
+      <div className={`flex w-full items-stretch rounded-xl border-2 ${isActive ? (isListening ? 'border-blue-500 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:bg-white') : 'border-slate-200 bg-slate-100'} transition-all shadow-sm overflow-hidden relative`}>
+        {detectedAmount !== null && (
+          <div className="absolute inset-0 bg-blue-50 flex items-center justify-between px-4 z-10 animate-in fade-in zoom-in duration-200">
+            <span className="text-blue-700 font-bold flex items-center gap-2">
+              <Mic size={16} className="text-blue-500" />
+              {detectedAmount} € ?
+            </span>
+            <div className="flex items-center gap-2">
+              <button 
+                type="button"
+                onClick={() => setDetectedAmount(null)}
+                className="p-1.5 rounded-full bg-white text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+                title="Annuler"
+              >
+                <X size={16} />
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  onChange(detectedAmount);
+                  setDetectedAmount(null);
+                }}
+                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                title="Valider"
+              >
+                <Check size={16} />
+              </button>
+            </div>
+          </div>
+        )}
         <span className="flex items-center pl-4 text-slate-400 font-bold">€</span>
         <input 
           type="number" 
