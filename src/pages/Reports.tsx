@@ -51,8 +51,11 @@ export function Reports() {
     }
     return {
       cb: true,
+      cbContactless: false,
       amex: true,
+      amexContactless: false,
       tr: true,
+      trContactless: false,
       cash: true,
       transfer: true
     };
@@ -377,17 +380,23 @@ export function Reports() {
     const currentDayRevs = filteredRevenues.filter(r => r.date === dateStr);
     const hasEntries = currentDayRevs.length > 0;
     const total = currentDayRevs.reduce((sum, r) => sum + r.total, 0);
-    const cb = currentDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
+    const cb = currentDayRevs.reduce((sum, r) => sum + r.payments.cb, 0);
+    const cbContactless = currentDayRevs.reduce((sum, r) => sum + r.payments.cbContactless, 0);
     const cash = currentDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
-    const tr = currentDayRevs.reduce((sum, r) => sum + r.payments.tr + r.payments.trContactless, 0);
-    const amex = currentDayRevs.reduce((sum, r) => sum + r.payments.amex + r.payments.amexContactless, 0);
+    const tr = currentDayRevs.reduce((sum, r) => sum + r.payments.tr, 0);
+    const trContactless = currentDayRevs.reduce((sum, r) => sum + r.payments.trContactless, 0);
+    const amex = currentDayRevs.reduce((sum, r) => sum + r.payments.amex, 0);
+    const amexContactless = currentDayRevs.reduce((sum, r) => sum + r.payments.amexContactless, 0);
     const transfer = currentDayRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
 
     let compTotal = undefined;
     let compCb = undefined;
+    let compCbContactless = undefined;
     let compCash = undefined;
     let compTr = undefined;
+    let compTrContactless = undefined;
     let compAmex = undefined;
+    let compAmexContactless = undefined;
     let compTransfer = undefined;
     let compHasEntries = undefined;
 
@@ -409,10 +418,13 @@ export function Reports() {
         const compDayRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
         compHasEntries = compDayRevs.length > 0;
         compTotal = compDayRevs.reduce((sum, r) => sum + r.total, 0);
-        compCb = compDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
+        compCb = compDayRevs.reduce((sum, r) => sum + r.payments.cb, 0);
+        compCbContactless = compDayRevs.reduce((sum, r) => sum + r.payments.cbContactless, 0);
         compCash = compDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
-        compTr = compDayRevs.reduce((sum, r) => sum + r.payments.tr + r.payments.trContactless, 0);
-        compAmex = compDayRevs.reduce((sum, r) => sum + r.payments.amex + r.payments.amexContactless, 0);
+        compTr = compDayRevs.reduce((sum, r) => sum + r.payments.tr, 0);
+        compTrContactless = compDayRevs.reduce((sum, r) => sum + r.payments.trContactless, 0);
+        compAmex = compDayRevs.reduce((sum, r) => sum + r.payments.amex, 0);
+        compAmexContactless = compDayRevs.reduce((sum, r) => sum + r.payments.amexContactless, 0);
         compTransfer = compDayRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
       }
     }
@@ -423,16 +435,22 @@ export function Reports() {
       hasEntries,
       total,
       cb,
+      cbContactless,
       cash,
       tr,
+      trContactless,
       amex,
+      amexContactless,
       transfer,
       compHasEntries,
       compTotal,
       compCb,
+      compCbContactless,
       compCash,
       compTr,
+      compTrContactless,
       compAmex,
+      compAmexContactless,
       compTransfer
     };
   });
@@ -452,15 +470,21 @@ export function Reports() {
   const avgPercent = calcPercent(avgRevenue, compAvgRevenue);
 
   const cbTotal = chartData.reduce((sum, d) => sum + d.cb, 0);
+  const cbContactlessTotal = chartData.reduce((sum, d) => sum + d.cbContactless, 0);
   const cashTotal = chartData.reduce((sum, d) => sum + d.cash, 0);
   const trTotal = chartData.reduce((sum, d) => sum + d.tr, 0);
+  const trContactlessTotal = chartData.reduce((sum, d) => sum + d.trContactless, 0);
   const amexTotal = chartData.reduce((sum, d) => sum + d.amex, 0);
+  const amexContactlessTotal = chartData.reduce((sum, d) => sum + d.amexContactless, 0);
   const transferTotal = chartData.reduce((sum, d) => sum + d.transfer, 0);
 
   const paymentTotals = [
     { name: 'CB', value: cbTotal, color: '#3b82f6' },
+    { name: 'CB SC', value: cbContactlessTotal, color: '#60a5fa' },
     { name: 'AMEX', value: amexTotal, color: '#f59e0b' },
+    { name: 'AMEX SC', value: amexContactlessTotal, color: '#fbbf24' },
     { name: 'TR', value: trTotal, color: '#10b981' },
+    { name: 'TR SC', value: trContactlessTotal, color: '#34d399' },
     { name: 'Espèces', value: cashTotal, color: '#8b5cf6' },
     { name: 'Virement', value: transferTotal, color: '#64748b' },
   ].filter(item => item.value > 0);
@@ -971,13 +995,25 @@ Généré par NordicRevenueS`;
                         <input type="checkbox" checked={visibleColumns.cb} onChange={(e) => setVisibleColumns(p => ({...p, cb: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                         <span className="text-sm font-medium text-slate-700">CB</span>
                       </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
+                        <input type="checkbox" checked={visibleColumns.cbContactless} onChange={(e) => setVisibleColumns(p => ({...p, cbContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-600">CB Sans Contact</span>
+                      </label>
                       <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
                         <input type="checkbox" checked={visibleColumns.amex} onChange={(e) => setVisibleColumns(p => ({...p, amex: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                         <span className="text-sm font-medium text-slate-700">AMEX</span>
                       </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
+                        <input type="checkbox" checked={visibleColumns.amexContactless} onChange={(e) => setVisibleColumns(p => ({...p, amexContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-600">AMEX Sans Contact</span>
+                      </label>
                       <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
                         <input type="checkbox" checked={visibleColumns.tr} onChange={(e) => setVisibleColumns(p => ({...p, tr: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                         <span className="text-sm font-medium text-slate-700">TR</span>
+                      </label>
+                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
+                        <input type="checkbox" checked={visibleColumns.trContactless} onChange={(e) => setVisibleColumns(p => ({...p, trContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-medium text-slate-600">TR Sans Contact</span>
                       </label>
                       <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
                         <input type="checkbox" checked={visibleColumns.cash} onChange={(e) => setVisibleColumns(p => ({...p, cash: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
@@ -998,8 +1034,11 @@ Généré par NordicRevenueS`;
                   <tr className="border-b border-slate-200 text-sm text-slate-500">
                     <th className="py-3 px-4 font-semibold">Date</th>
                     {visibleColumns.cb && <th className="py-3 px-4 font-semibold text-right">CB</th>}
+                    {visibleColumns.cbContactless && <th className="py-3 px-4 font-semibold text-right">CB SC</th>}
                     {visibleColumns.amex && <th className="py-3 px-4 font-semibold text-right">AMEX</th>}
+                    {visibleColumns.amexContactless && <th className="py-3 px-4 font-semibold text-right">AMEX SC</th>}
                     {visibleColumns.tr && <th className="py-3 px-4 font-semibold text-right">TR</th>}
+                    {visibleColumns.trContactless && <th className="py-3 px-4 font-semibold text-right">TR SC</th>}
                     {visibleColumns.cash && <th className="py-3 px-4 font-semibold text-right">Espèces</th>}
                     {visibleColumns.transfer && <th className="py-3 px-4 font-semibold text-right">Virement</th>}
                     <th className="py-3 px-4 font-semibold text-right">Total</th>
@@ -1010,8 +1049,11 @@ Généré par NordicRevenueS`;
                     <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                       <td className="py-3 px-4 font-medium text-slate-900">{day.date}</td>
                       {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{day.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                       {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-600">{day.amexContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                       {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600">{day.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                      {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-600">{day.trContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                       {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600">{day.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                       {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600">{day.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                       <td className="py-3 px-4 text-right font-bold text-slate-900">{day.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
@@ -1022,8 +1064,11 @@ Généré par NordicRevenueS`;
                   <tr>
                     <td className="py-4 px-4 text-slate-900 uppercase tracking-wider text-xs">Total Période</td>
                     {visibleColumns.cb && <td className="py-4 px-4 text-right text-slate-900">{cbTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.cbContactless && <td className="py-4 px-4 text-right text-slate-900">{cbContactlessTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     {visibleColumns.amex && <td className="py-4 px-4 text-right text-slate-900">{amexTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.amexContactless && <td className="py-4 px-4 text-right text-slate-900">{amexContactlessTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     {visibleColumns.tr && <td className="py-4 px-4 text-right text-slate-900">{trTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                    {visibleColumns.trContactless && <td className="py-4 px-4 text-right text-slate-900">{trContactlessTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     {visibleColumns.cash && <td className="py-4 px-4 text-right text-slate-900">{cashTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     {visibleColumns.transfer && <td className="py-4 px-4 text-right text-slate-900">{transferTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     <td className="py-4 px-4 text-right text-blue-600 text-base">{totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
@@ -1033,8 +1078,11 @@ Généré par NordicRevenueS`;
                       <tr className="border-t border-slate-200 bg-slate-50">
                         <td className="py-3 px-4 text-slate-500 uppercase tracking-wider text-xs">Total Comparaison</td>
                         {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCb || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCbContactless || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compAmex || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compAmexContactless || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTr || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTrContactless || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compCash || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-500">{chartData.reduce((sum, d) => sum + (d.compTransfer || 0), 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         <td className="py-3 px-4 text-right text-slate-500">{compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
@@ -1046,6 +1094,21 @@ Généré par NordicRevenueS`;
                             {(() => {
                               const current = cbTotal;
                               const prev = chartData.reduce((sum, d) => sum + (d.compCb || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleColumns.cbContactless && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = cbContactlessTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compCbContactless || 0), 0);
                               const pct = calcPercent(current, prev);
                               return (
                                 <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
@@ -1071,11 +1134,41 @@ Généré par NordicRevenueS`;
                             })()}
                           </td>
                         )}
+                        {visibleColumns.amexContactless && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = amexContactlessTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compAmexContactless || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
                         {visibleColumns.tr && (
                           <td className="py-3 px-4 text-right">
                             {(() => {
                               const current = trTotal;
                               const prev = chartData.reduce((sum, d) => sum + (d.compTr || 0), 0);
+                              const pct = calcPercent(current, prev);
+                              return (
+                                <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                  {pct > 0 ? <ArrowUpRight size={14} /> : pct < 0 ? <ArrowDownRight size={14} /> : <Minus size={14} />}
+                                  {Math.abs(pct).toFixed(1)}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleColumns.trContactless && (
+                          <td className="py-3 px-4 text-right">
+                            {(() => {
+                              const current = trContactlessTotal;
+                              const prev = chartData.reduce((sum, d) => sum + (d.compTrContactless || 0), 0);
                               const pct = calcPercent(current, prev);
                               return (
                                 <span className={`flex items-center justify-end gap-1 ${pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-600' : 'text-slate-400'}`}>

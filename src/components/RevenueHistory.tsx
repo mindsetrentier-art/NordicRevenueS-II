@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { Revenue, Payments } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Edit2, Trash2, X, Save, Paperclip } from 'lucide-react';
+import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -18,6 +18,8 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
   const [loading, setLoading] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<Revenue | null>(null);
   const [deletingRevenue, setDeletingRevenue] = useState<Revenue | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     const fetchRevenues = async () => {
@@ -33,6 +35,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
         const snap = await getDocs(q);
         const data = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Revenue));
         setRevenues(data);
+        setCurrentPage(1); // Reset to first page on new data
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'revenues');
       } finally {
@@ -89,6 +92,12 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
     });
   };
 
+  const totalPages = Math.ceil(revenues.length / itemsPerPage);
+  const paginatedRevenues = revenues.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   if (!establishmentId) return null;
 
   return (
@@ -113,7 +122,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
               </tr>
             </thead>
             <tbody className="text-sm">
-              {revenues.map(revenue => (
+              {paginatedRevenues.map(revenue => (
                 <tr key={revenue.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="py-3 px-4 font-medium text-slate-900">
                     {format(parseISO(revenue.date), 'dd MMM yyyy', { locale: fr })}
@@ -180,6 +189,36 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between border-t border-slate-200 pt-4">
+          <div className="text-sm text-slate-500">
+            Affichage de <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> à <span className="font-medium">{Math.min(currentPage * itemsPerPage, revenues.length)}</span> sur <span className="font-medium">{revenues.length}</span> saisies
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Page précédente"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div className="text-sm font-medium text-slate-700 px-2">
+              Page {currentPage} sur {totalPages}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Page suivante"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
       )}
 
