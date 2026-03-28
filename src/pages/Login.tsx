@@ -3,12 +3,16 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Login() {
-  const { currentUser, login } = useAuth();
+  const { userProfile, loading: authLoading, login } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
-  if (currentUser) {
+  if (authLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50">Chargement...</div>;
+  }
+
+  if (userProfile) {
     return <Navigate to="/" replace />;
   }
 

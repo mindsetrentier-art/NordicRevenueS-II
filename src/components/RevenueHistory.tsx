@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { Revenue, Payments } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Edit2, Trash2, X, Save } from 'lucide-react';
+import { Edit2, Trash2, X, Save, Paperclip } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -107,6 +107,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 <th className="py-3 px-4 font-semibold">Date</th>
                 <th className="py-3 px-4 font-semibold">Service</th>
                 <th className="py-3 px-4 font-semibold">Notes</th>
+                <th className="py-3 px-4 font-semibold">Pièces jointes</th>
                 <th className="py-3 px-4 font-semibold text-right">Total</th>
                 <th className="py-3 px-4 font-semibold text-center">Actions</th>
               </tr>
@@ -118,8 +119,39 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                     {format(parseISO(revenue.date), 'dd MMM yyyy', { locale: fr })}
                   </td>
                   <td className="py-3 px-4 capitalize text-slate-600">{revenue.service}</td>
-                  <td className="py-3 px-4 text-slate-500 max-w-[200px] truncate" title={revenue.notes}>
+                  <td className="py-3 px-4 text-slate-500 max-w-[200px] truncate relative group" title={revenue.notes}>
                     {revenue.notes || '-'}
+                    {revenue.notes && revenue.notes.length > 25 && (
+                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-max max-w-xs bg-slate-800 text-white text-xs rounded-lg p-2 z-10 shadow-lg whitespace-normal break-words">
+                        {revenue.notes}
+                        <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800"></div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {revenue.attachments && revenue.attachments.length > 0 ? (
+                      <div className="flex -space-x-2">
+                        {revenue.attachments.slice(0, 3).map((att, idx) => (
+                          <a 
+                            key={idx} 
+                            href={att.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:z-10 transition-colors"
+                            title={att.name}
+                          >
+                            <Paperclip size={14} />
+                          </a>
+                        ))}
+                        {revenue.attachments.length > 3 && (
+                          <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-600">
+                            +{revenue.attachments.length - 3}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-right font-bold text-slate-900">
                     {revenue.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}

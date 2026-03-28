@@ -31,6 +31,13 @@ export interface Payments {
   transfer: number;
 }
 
+export interface Attachment {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface Revenue {
   id: string;
   establishmentId: string;
@@ -39,6 +46,7 @@ export interface Revenue {
   payments: Payments;
   total: number;
   notes?: string;
+  attachments?: Attachment[];
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;

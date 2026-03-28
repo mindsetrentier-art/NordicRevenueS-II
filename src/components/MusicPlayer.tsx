@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Music, Play, Pause, SkipForward, SkipBack, X, LogIn, Youtube } from 'lucide-react';
 
 type Platform = 'spotify' | 'deezer' | 'youtube';
@@ -66,13 +66,13 @@ export function MusicPlayer() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  useEffect(() => {
-    if (tokens[activePlatform]) {
-      fetchPlaylists(activePlatform);
-    }
-  }, [tokens, activePlatform]);
+  const handleLogout = useCallback((platform: Platform) => {
+    setTokens(prev => ({ ...prev, [platform]: null }));
+    if (activePlatform === platform) setSelectedPlaylist(null);
+    localStorage.removeItem(`${platform}_token`);
+  }, [activePlatform]);
 
-  const fetchPlaylists = async (platform: Platform) => {
+  const fetchPlaylists = useCallback(async (platform: Platform) => {
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -140,7 +140,13 @@ export function MusicPlayer() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tokens, handleLogout]);
+
+  useEffect(() => {
+    if (tokens[activePlatform]) {
+      fetchPlaylists(activePlatform);
+    }
+  }, [tokens, activePlatform, fetchPlaylists]);
 
   const handleConnect = async (platform: Platform) => {
     try {
@@ -163,12 +169,6 @@ export function MusicPlayer() {
       console.error('OAuth error:', error);
       setErrorMsg(error.message || 'Erreur de connexion');
     }
-  };
-
-  const handleLogout = (platform: Platform) => {
-    setTokens(prev => ({ ...prev, [platform]: null }));
-    if (activePlatform === platform) setSelectedPlaylist(null);
-    localStorage.removeItem(`${platform}_token`);
   };
 
   const renderPlayer = () => {

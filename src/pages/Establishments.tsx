@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Store, Plus, Edit2, Trash2, X, Check } from 'lucide-react';
+import { Store, Plus, Edit2, Trash2, X, Check, AlertCircle } from 'lucide-react';
 
 export function Establishments() {
   const { userProfile } = useAuth();
@@ -15,6 +15,7 @@ export function Establishments() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [estToDelete, setEstToDelete] = useState<Establishment | null>(null);
   const [editingEst, setEditingEst] = useState<Establishment | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
   // Form state
   const [name, setName] = useState('');
@@ -22,7 +23,7 @@ export function Establishments() {
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
 
-  const fetchEstablishments = async () => {
+  const fetchEstablishments = useCallback(async () => {
     if (!userProfile) return;
     setLoading(true);
     try {
@@ -54,15 +55,16 @@ export function Establishments() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userProfile]);
 
   useEffect(() => {
     fetchEstablishments();
-  }, [userProfile]);
+  }, [fetchEstablishments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
+    setError(null);
 
     try {
       if (editingEst) {
@@ -92,8 +94,10 @@ export function Establishments() {
       setIsModalOpen(false);
       resetForm();
       fetchEstablishments();
-    } catch (error) {
-      handleFirestoreError(error, editingEst ? OperationType.UPDATE : OperationType.CREATE, 'establishments');
+    } catch (err) {
+      console.error("Error saving establishment:", err);
+      setError("Une erreur est survenue lors de l'enregistrement. Veuillez réessayer.");
+      handleFirestoreError(err, editingEst ? OperationType.UPDATE : OperationType.CREATE, 'establishments');
     }
   };
 
@@ -263,6 +267,12 @@ export function Establishments() {
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3">
+                  <AlertCircle size={20} />
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nom de l'établissement *</label>
                 <input

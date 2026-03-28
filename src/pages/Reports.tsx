@@ -15,7 +15,10 @@ import {
   Legend, 
   ResponsiveContainer,
   LineChart,
-  Line
+  Line,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -310,6 +313,18 @@ export function Reports() {
     }
   };
 
+  const filteredRevenues = revenues.filter(rev => {
+    if (!searchQuery) return true;
+    const est = establishments.find(e => e.id === rev.establishmentId);
+    return est?.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  const filteredCompRevenues = compRevenues.filter(rev => {
+    if (!searchQuery) return true;
+    const est = establishments.find(e => e.id === rev.establishmentId);
+    return est?.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   const exportCSV = () => {
     const headers = ['Période', 'Date', 'Établissement', 'Service', 'Total', 'CB', 'Espèces', 'TR', 'AMEX', 'Virement'];
     
@@ -336,10 +351,10 @@ export function Reports() {
       });
     };
 
-    let rows = generateRows(revenues, 'Actuelle');
+    let rows = generateRows(filteredRevenues, 'Actuelle');
     
     if (compareMode !== 'none') {
-      rows = rows.concat(generateRows(compRevenues, 'Comparaison'));
+      rows = rows.concat(generateRows(filteredCompRevenues, 'Comparaison'));
     }
 
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -359,7 +374,7 @@ export function Reports() {
     const dateStr = format(day, 'yyyy-MM-dd');
     const displayDate = format(day, 'dd MMM', { locale: fr });
     
-    const currentDayRevs = revenues.filter(r => r.date === dateStr);
+    const currentDayRevs = filteredRevenues.filter(r => r.date === dateStr);
     const hasEntries = currentDayRevs.length > 0;
     const total = currentDayRevs.reduce((sum, r) => sum + r.total, 0);
     const cb = currentDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
@@ -391,7 +406,7 @@ export function Reports() {
       }
       
       if (compDateStr) {
-        const compDayRevs = compRevenues.filter(r => r.date === compDateStr);
+        const compDayRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
         compHasEntries = compDayRevs.length > 0;
         compTotal = compDayRevs.reduce((sum, r) => sum + r.total, 0);
         compCb = compDayRevs.reduce((sum, r) => sum + r.payments.cb + r.payments.cbContactless, 0);
@@ -422,14 +437,14 @@ export function Reports() {
     };
   });
 
-  const totalRevenue = revenues.reduce((sum, rev) => sum + rev.total, 0);
-  const compTotalRevenue = compRevenues.reduce((sum, rev) => sum + rev.total, 0);
+  const totalRevenue = filteredRevenues.reduce((sum, rev) => sum + rev.total, 0);
+  const compTotalRevenue = filteredCompRevenues.reduce((sum, rev) => sum + rev.total, 0);
   
   // Calculate unique days for average
-  const uniqueDays = new Set(revenues.map(r => r.date)).size;
+  const uniqueDays = new Set(filteredRevenues.map(r => r.date)).size;
   const avgRevenue = uniqueDays > 0 ? totalRevenue / uniqueDays : 0;
   
-  const compUniqueDays = new Set(compRevenues.map(r => r.date)).size;
+  const compUniqueDays = new Set(filteredCompRevenues.map(r => r.date)).size;
   const compAvgRevenue = compUniqueDays > 0 ? compTotalRevenue / compUniqueDays : 0;
 
   const calcPercent = (curr: number, prev: number) => prev === 0 ? (curr > 0 ? 100 : 0) : ((curr - prev) / prev) * 100;
@@ -441,6 +456,14 @@ export function Reports() {
   const trTotal = chartData.reduce((sum, d) => sum + d.tr, 0);
   const amexTotal = chartData.reduce((sum, d) => sum + d.amex, 0);
   const transferTotal = chartData.reduce((sum, d) => sum + d.transfer, 0);
+
+  const paymentTotals = [
+    { name: 'CB', value: cbTotal, color: '#3b82f6' },
+    { name: 'AMEX', value: amexTotal, color: '#f59e0b' },
+    { name: 'TR', value: trTotal, color: '#10b981' },
+    { name: 'Espèces', value: cashTotal, color: '#8b5cf6' },
+    { name: 'Virement', value: transferTotal, color: '#64748b' },
+  ].filter(item => item.value > 0);
 
   const sendByEmail = () => {
     const formatCurrency = (val: number) => val.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -857,46 +880,77 @@ Généré par NordicRevenueS`;
             </div>
           </div>
 
-          {/* Payment Breakdown Chart */}
-          <div id="report-payment-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-900">Répartition par Moyen de Paiement</h3>
-              <button
-                onClick={exportChartAsImage}
-                className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                <Download size={14} /> Exporter Image
-              </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Payment Breakdown Pie Chart */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 mb-6">Part de chaque moyen de paiement</h3>
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <PieChart>
+                    <Pie
+                      data={paymentTotals}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={120}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {paymentTotals.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => `${value.toFixed(2)} €`}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div id="payment-chart-container" className="h-80 w-full bg-white p-2">
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#64748b', fontSize: 12 }}
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#64748b', fontSize: 12 }}
-                    tickFormatter={(value) => `${value}€`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => `${value.toFixed(2)} €`}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  <Bar dataKey="cb" name="CB" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="amex" name="AMEX" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="tr" name="TR" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="transfer" name="Virement" fill="#64748b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+
+            {/* Payment Breakdown Chart */}
+            <div id="report-payment-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-slate-900">Évolution par Moyen de Paiement</h3>
+                <button
+                  onClick={exportChartAsImage}
+                  className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Download size={14} /> Exporter Image
+                </button>
+              </div>
+              <div id="payment-chart-container" className="h-80 w-full bg-white p-2">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      tickFormatter={(value) => `${value}€`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number) => `${value.toFixed(2)} €`}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                    <Bar dataKey="cb" name="CB" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="amex" name="AMEX" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="tr" name="TR" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="transfer" name="Virement" fill="#64748b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 

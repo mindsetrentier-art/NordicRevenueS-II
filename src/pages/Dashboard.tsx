@@ -15,7 +15,10 @@ import {
   Bell,
   Store,
   Clock,
-  ChevronDown
+  ChevronDown,
+  HelpCircle,
+  Shield,
+  X
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -67,6 +70,8 @@ export function Dashboard() {
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(true);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -560,6 +565,141 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Footer Legal & Support */}
+      <div className="mt-12 border-t border-slate-200 pt-8 pb-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+        <div className="flex items-center gap-6">
+          <button onClick={() => setShowHelpModal(true)} className="hover:text-slate-900 transition-colors flex items-center gap-2">
+            <HelpCircle size={16} />
+            Aide & Support
+          </button>
+          <button onClick={() => setShowPrivacyModal(true)} className="hover:text-slate-900 transition-colors flex items-center gap-2">
+            <Shield size={16} />
+            Confidentialité (RGPD)
+          </button>
+        </div>
+        <p>© {new Date().getFullYear()} NordicRevenueS. Tous droits réservés.</p>
+      </div>
+
+      {/* Help & Support Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <HelpCircle className="text-blue-600" />
+                Aide & Support
+              </h2>
+              <button onClick={() => setShowHelpModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-6 text-slate-600">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Besoin d'assistance ?</h3>
+                <p>Notre équipe de support est disponible pour vous aider avec l'utilisation de NordicRevenueS.</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <h4 className="font-semibold text-blue-900 mb-1">Contact Email</h4>
+                  <p className="text-sm text-blue-700">support@nordicrevenues.fr</p>
+                  <p className="text-xs text-blue-600 mt-2">Réponse sous 24h ouvrées</p>
+                </div>
+                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <h4 className="font-semibold text-emerald-900 mb-1">Assistance Téléphonique</h4>
+                  <p className="text-sm text-emerald-700">+33 (0)1 23 45 67 89</p>
+                  <p className="text-xs text-emerald-600 mt-2">Du lundi au vendredi, 9h-18h</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">FAQ</h3>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-slate-900">Comment exporter mes données ?</h4>
+                    <p className="text-sm mt-1">Rendez-vous dans la section "Rapports" et utilisez les boutons d'export (PDF, CSV) en haut de la page.</p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-slate-900">Comment ajouter un nouvel établissement ?</h4>
+                    <p className="text-sm mt-1">Seuls les administrateurs peuvent ajouter des établissements depuis la section "Établissements".</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button 
+                onClick={() => setShowHelpModal(false)}
+                className="px-6 py-2 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-colors"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy (RGPD) Modal */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Shield className="text-emerald-600" />
+                Politique de Confidentialité (RGPD)
+              </h2>
+              <button onClick={() => setShowPrivacyModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-6 text-slate-600 text-sm">
+              <p>
+                Conformément au Règlement Général sur la Protection des Données (RGPD) de l'Union Européenne et à la loi Informatique et Libertés en France, NordicRevenueS s'engage à protéger vos données personnelles.
+              </p>
+
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 mb-2">1. Collecte des données</h3>
+                <p>Nous collectons uniquement les données strictement nécessaires au fonctionnement de l'application : adresse email, nom, prénom, et données financières liées à vos établissements. Ces données sont stockées de manière sécurisée.</p>
+              </div>
+
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 mb-2">2. Utilisation des données</h3>
+                <p>Vos données sont utilisées exclusivement pour :</p>
+                <ul className="list-disc pl-5 mt-2 space-y-1">
+                  <li>L'authentification et la gestion des accès à l'application.</li>
+                  <li>Le calcul et l'affichage des statistiques financières de vos établissements.</li>
+                  <li>L'envoi d'alertes configurées par vos soins.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 mb-2">3. Vos droits (Loi Française & Européenne)</h3>
+                <p>Conformément à la réglementation en vigueur, vous disposez des droits suivants :</p>
+                <ul className="list-disc pl-5 mt-2 space-y-1">
+                  <li><strong>Droit d'accès :</strong> Vous pouvez demander à consulter les données que nous possédons sur vous.</li>
+                  <li><strong>Droit de rectification :</strong> Vous pouvez demander la modification de données inexactes.</li>
+                  <li><strong>Droit à l'effacement (droit à l'oubli) :</strong> Vous pouvez demander la suppression de vos données.</li>
+                  <li><strong>Droit à la portabilité :</strong> Vous pouvez récupérer vos données dans un format structuré.</li>
+                </ul>
+                <p className="mt-2">Pour exercer ces droits, veuillez contacter notre Délégué à la Protection des Données (DPO) à l'adresse : <a href="mailto:dpo@nordicrevenues.fr" className="text-blue-600 hover:underline">dpo@nordicrevenues.fr</a>.</p>
+              </div>
+
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 mb-2">4. Sécurité et Hébergement</h3>
+                <p>Vos données sont hébergées sur des serveurs sécurisés situés au sein de l'Union Européenne (Google Cloud Platform / Firebase), garantissant un niveau de sécurité conforme aux exigences européennes.</p>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button 
+                onClick={() => setShowPrivacyModal(false)}
+                className="px-6 py-2 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-colors"
+              >
+                J'ai compris
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

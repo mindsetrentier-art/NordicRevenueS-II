@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Establishment, Payments } from '../types';
+import { Establishment, Payments, Attachment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
 import { 
@@ -20,7 +21,11 @@ import {
   MicOff,
   MessageSquare,
   Check,
-  X
+  X,
+  Paperclip,
+  Camera,
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Calculator } from '../components/Calculator';
@@ -47,6 +52,8 @@ export function RevenueEntry() {
   const [paymentsSoir, setPaymentsSoir] = useState<Payments>(INITIAL_PAYMENTS);
   const [notesMidi, setNotesMidi] = useState('');
   const [notesSoir, setNotesSoir] = useState('');
+  const [attachmentsMidi, setAttachmentsMidi] = useState<File[]>([]);
+  const [attachmentsSoir, setAttachmentsSoir] = useState<File[]>([]);
 
   const [activeMethods, setActiveMethods] = useState<Record<keyof Payments, boolean>>(() => {
     const saved = localStorage.getItem('activePaymentMethods');
@@ -71,6 +78,7 @@ export function RevenueEntry() {
   const [isMidiActive, setIsMidiActive] = useState(true);
   const [isSoirActive, setIsSoirActive] = useState(true);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
@@ -136,9 +144,36 @@ export function RevenueEntry() {
     
     setLoading(true);
     setSuccess(false);
+    setError(null);
     
     try {
       const promises = [];
+      
+      const uploadAttachments = async (files: File[], service: string): Promise<Attachment[]> => {
+        const uploaded: Attachment[] = [];
+        for (const file of files) {
+          const fileRef = ref(storage, `revenues/${selectedEst}/${date}/${service}/${Date.now()}_${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          uploaded.push({
+            url,
+            name: file.name,
+            type: file.type,
+            size: file.size
+          });
+        }
+        return uploaded;
+      };
+
+      let midiAttachmentsData: Attachment[] = [];
+      let soirAttachmentsData: Attachment[] = [];
+
+      if (isMidiActive && attachmentsMidi.length > 0) {
+        midiAttachmentsData = await uploadAttachments(attachmentsMidi, 'midi');
+      }
+      if (isSoirActive && attachmentsSoir.length > 0) {
+        soirAttachmentsData = await uploadAttachments(attachmentsSoir, 'soir');
+      }
       
       if (isMidiActive) {
         promises.push(addDoc(collection(db, 'revenues'), {
@@ -148,6 +183,7 @@ export function RevenueEntry() {
           payments: paymentsMidi,
           total: totalMidi,
           notes: notesMidi.trim(),
+          attachments: midiAttachmentsData,
           createdBy: userProfile.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -162,6 +198,7 @@ export function RevenueEntry() {
           payments: paymentsSoir,
           total: totalSoir,
           notes: notesSoir.trim(),
+          attachments: soirAttachmentsData,
           createdBy: userProfile.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -177,10 +214,14 @@ export function RevenueEntry() {
       setPaymentsSoir(INITIAL_PAYMENTS);
       setNotesMidi('');
       setNotesSoir('');
+      setAttachmentsMidi([]);
+      setAttachmentsSoir([]);
       setRefreshTrigger(prev => prev + 1);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'revenues');
+    } catch (err) {
+      console.error("Error saving revenue:", err);
+      setError("Une erreur est survenue lors de l'enregistrement. Veuillez réessayer.");
+      handleFirestoreError(err, OperationType.CREATE, 'revenues');
     } finally {
       setLoading(false);
     }
@@ -208,21 +249,33 @@ export function RevenueEntry() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3">
+            <AlertCircle size={20} />
+            <p>{error}</p>
+          </div>
+        )}
         {/* Header Config */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Établissement</label>
-            <select
-              value={selectedEst}
-              onChange={(e) => setSelectedEst(e.target.value)}
-              required
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
-            >
-              <option value="" disabled>Sélectionnez un établissement</option>
-              {establishments.map(est => (
-                <option key={est.id} value={est.id}>{est.name}</option>
-              ))}
-            </select>
+            {establishments.length === 0 ? (
+              <div className="text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200 text-sm">
+                Aucun établissement disponible. Veuillez en créer un dans les paramètres.
+              </div>
+            ) : (
+              <select
+                value={selectedEst}
+                onChange={(e) => setSelectedEst(e.target.value)}
+                required
+                className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+              >
+                <option value="" disabled>Sélectionnez un établissement</option>
+                {establishments.map(est => (
+                  <option key={est.id} value={est.id}>{est.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Date d'exploitation</label>
@@ -245,6 +298,8 @@ export function RevenueEntry() {
             setPayments={setPaymentsMidi}
             notes={notesMidi}
             setNotes={setNotesMidi}
+            attachments={attachmentsMidi}
+            setAttachments={setAttachmentsMidi}
             activeMethods={activeMethods}
             onToggleMethod={handleToggleMethod}
             total={totalMidi}
@@ -254,6 +309,7 @@ export function RevenueEntry() {
               if (isMidiActive) {
                 setPaymentsMidi(INITIAL_PAYMENTS);
                 setNotesMidi('');
+                setAttachmentsMidi([]);
               }
             }}
           />
@@ -266,6 +322,8 @@ export function RevenueEntry() {
             setPayments={setPaymentsSoir}
             notes={notesSoir}
             setNotes={setNotesSoir}
+            attachments={attachmentsSoir}
+            setAttachments={setAttachmentsSoir}
             activeMethods={activeMethods}
             onToggleMethod={handleToggleMethod}
             total={totalSoir}
@@ -275,13 +333,14 @@ export function RevenueEntry() {
               if (isSoirActive) {
                 setPaymentsSoir(INITIAL_PAYMENTS);
                 setNotesSoir('');
+                setAttachmentsSoir([]);
               }
             }}
           />
         </div>
 
         {/* Footer / Submit */}
-        <div className="sticky bottom-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/50 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
+        <div className="sticky bottom-4 bg-white p-6 pb-24 sm:pb-6 sm:pr-24 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/50 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
           <div>
             <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Journalier</p>
             <p className="text-3xl font-black text-slate-900">
@@ -325,6 +384,8 @@ function ServiceSection({
   setPayments,
   notes,
   setNotes,
+  attachments,
+  setAttachments,
   activeMethods,
   onToggleMethod,
   total,
@@ -337,6 +398,8 @@ function ServiceSection({
   setPayments: React.Dispatch<React.SetStateAction<Payments>>;
   notes: string;
   setNotes: React.Dispatch<React.SetStateAction<string>>;
+  attachments: File[];
+  setAttachments: React.Dispatch<React.SetStateAction<File[]>>;
   activeMethods: Record<keyof Payments, boolean>;
   onToggleMethod: (field: keyof Payments) => void;
   total: number;
@@ -485,6 +548,45 @@ function ServiceSection({
             placeholder="Ajoutez un commentaire sur ce service..."
             className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
           />
+        </div>
+
+        {/* Attachments */}
+        <div className="pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
+            <Paperclip className="text-slate-500" size={16} /> Pièces jointes
+          </h3>
+          <div className="flex flex-col gap-3">
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((file, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-sm">
+                    <span className="truncate max-w-[150px]" title={file.name}>{file.name}</span>
+                    <button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <label className="cursor-pointer flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors">
+                <Camera size={16} /> Prendre une photo
+                <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => {
+                  if (e.target.files) {
+                    setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                  }
+                }} />
+              </label>
+              <label className="cursor-pointer flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors">
+                <FileText size={16} /> Ajouter un document
+                <input type="file" accept="image/*,video/*,application/pdf" multiple className="hidden" onChange={(e) => {
+                  if (e.target.files) {
+                    setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                  }
+                }} />
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     </div>

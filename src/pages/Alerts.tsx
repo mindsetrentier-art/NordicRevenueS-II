@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { AlertRule, Establishment, AlertType, Payments } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Bell, Plus, Edit2, Trash2, AlertTriangle, CheckCircle2, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Bell, Plus, Edit2, Trash2, AlertTriangle, CheckCircle2, X, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 
 export function Alerts() {
@@ -17,6 +17,7 @@ export function Alerts() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [alertToDelete, setAlertToDelete] = useState<string | null>(null);
   const [editingAlert, setEditingAlert] = useState<AlertRule | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -27,13 +28,7 @@ export function Alerts() {
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [isActive, setIsActive] = useState(true);
 
-  useEffect(() => {
-    if (userProfile) {
-      fetchData();
-    }
-  }, [userProfile]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch establishments
@@ -69,7 +64,13 @@ export function Alerts() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userProfile]);
+
+  useEffect(() => {
+    if (userProfile) {
+      fetchData();
+    }
+  }, [userProfile, fetchData]);
 
   const openModal = (alert?: AlertRule) => {
     if (alert) {
@@ -102,6 +103,7 @@ export function Alerts() {
   const saveAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
+    setError(null);
 
     try {
       const alertData = {
@@ -127,8 +129,10 @@ export function Alerts() {
       
       closeModal();
       fetchData();
-    } catch (error) {
-      handleFirestoreError(error, editingAlert ? OperationType.UPDATE : OperationType.CREATE, 'alerts');
+    } catch (err) {
+      console.error("Error saving alert:", err);
+      setError("Une erreur est survenue lors de l'enregistrement. Veuillez réessayer.");
+      handleFirestoreError(err, editingAlert ? OperationType.UPDATE : OperationType.CREATE, 'alerts');
     }
   };
 
@@ -435,6 +439,12 @@ export function Alerts() {
             </div>
             
             <form onSubmit={saveAlert} className="p-6 overflow-y-auto flex-1 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3">
+                  <AlertCircle size={20} />
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Nom de l'alerte</label>
                 <input 

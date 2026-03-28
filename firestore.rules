@@ -85,12 +85,14 @@ service cloud.firestore {
     }
     
     function isValidRevenue(data, isUpdate) {
-      return hasOnlyAllowedFields(['establishmentId', 'date', 'service', 'payments', 'total', 'createdBy', 'createdAt', 'updatedAt']) &&
+      return hasOnlyAllowedFields(['establishmentId', 'date', 'service', 'payments', 'total', 'notes', 'attachments', 'createdBy', 'createdAt', 'updatedAt']) &&
              data.establishmentId is string && data.establishmentId.size() > 0 &&
              data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
              data['service'] is string && (data['service'] == 'midi' || data['service'] == 'soir') &&
              isValidPayments(data.payments) &&
              data.total is number && data.total >= 0 &&
+             (!('notes' in data) || data.notes is string) &&
+             (!('attachments' in data) || data.attachments is list) &&
              data.createdBy is string && (isUpdate || data.createdBy == request.auth.uid) &&
              data.createdAt is timestamp &&
              data.updatedAt is timestamp;

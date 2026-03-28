@@ -80,6 +80,17 @@
           "type": "number",
           "description": "Total revenue for the day"
         },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes for the revenue entry"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Optional attachments for the revenue entry"
+        },
         "createdBy": {
           "type": "string",
           "description": "UID of the user who created the entry"
