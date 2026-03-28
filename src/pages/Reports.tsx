@@ -698,11 +698,10 @@ Généré par NordicRevenueS`;
         <div className="h-64 flex items-center justify-center text-slate-400">Chargement des données...</div>
       ) : (
         <div id="pdf-export-content" className="space-y-8">
-          {/* Comparaison des chiffres d'affaires */}
-          {compareMode !== 'none' && (
-            <div id="report-comparison" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Comparaison des chiffres d'affaires</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Performances Globales */}
+          <div id="report-comparison" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Performances Globales (vs N-1)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Ce Jour */}
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                   <p className="text-xs font-semibold text-slate-500 mb-1">Ce jour vs N-1</p>
@@ -749,7 +748,6 @@ Généré par NordicRevenueS`;
                 </div>
               </div>
             </div>
-          )}
 
           {/* KPI Summary */}
           <div id="report-kpis" className="grid grid-cols-1 md:grid-cols-3 gap-6">

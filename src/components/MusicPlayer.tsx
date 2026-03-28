@@ -12,6 +12,7 @@ interface Playlist {
 
 export function MusicPlayer() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [activePlatform, setActivePlatform] = useState<Platform>('spotify');
   
   const [tokens, setTokens] = useState<Record<Platform, string | null>>({
@@ -29,6 +30,24 @@ export function MusicPlayer() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const timerRef = React.useRef<NodeJS.Timeout>();
+
+  const resetMinimizeTimer = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!isOpen) {
+      setIsMinimized(false);
+      timerRef.current = setTimeout(() => {
+        setIsMinimized(true);
+      }, 5000);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    resetMinimizeTimer();
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [resetMinimizeTimer]);
 
   useEffect(() => {
     const savedSpotify = localStorage.getItem('spotify_token');
@@ -232,10 +251,22 @@ export function MusicPlayer() {
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 p-4 text-white rounded-full shadow-lg transition-colors z-40 ${getPlatformColor(activePlatform)}`}
+        onMouseEnter={() => {
+          if (timerRef.current) clearTimeout(timerRef.current);
+          setIsMinimized(false);
+        }}
+        onMouseLeave={resetMinimizeTimer}
+        onClick={() => {
+          setIsOpen(true);
+          setIsMinimized(false);
+        }}
+        className={`fixed bottom-6 z-40 flex items-center justify-center text-white shadow-lg transition-all duration-500 ease-in-out overflow-hidden ${getPlatformColor(activePlatform)} ${
+          isMinimized 
+            ? 'right-0 w-2 h-16 rounded-l-md opacity-50 hover:opacity-100 hover:w-3' 
+            : 'right-6 w-14 h-14 rounded-full opacity-100'
+        }`}
       >
-        <Music size={24} />
+        <Music size={24} className={`transition-all duration-500 min-w-[24px] ${isMinimized ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`} />
       </button>
 
       {isOpen && (

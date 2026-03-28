@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
@@ -80,6 +80,68 @@ export function RevenueEntry() {
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const currentDraftKey = useRef<string>('');
+
+  useEffect(() => {
+    if (!selectedEst || !date) return;
+    const newDraftKey = `revenue_draft_${selectedEst}_${date}`;
+    
+    if (currentDraftKey.current !== newDraftKey) {
+      // Load draft when switching establishment or date
+      const saved = localStorage.getItem(newDraftKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setPaymentsMidi(parsed.paymentsMidi || INITIAL_PAYMENTS);
+          setPaymentsSoir(parsed.paymentsSoir || INITIAL_PAYMENTS);
+          setNotesMidi(parsed.notesMidi || '');
+          setNotesSoir(parsed.notesSoir || '');
+          setIsMidiActive(parsed.isMidiActive ?? true);
+          setIsSoirActive(parsed.isSoirActive ?? true);
+          setLastSaved(new Date(parsed.timestamp));
+        } catch (e) {
+          console.error("Failed to load draft", e);
+        }
+      } else {
+        setPaymentsMidi(INITIAL_PAYMENTS);
+        setPaymentsSoir(INITIAL_PAYMENTS);
+        setNotesMidi('');
+        setNotesSoir('');
+        setIsMidiActive(true);
+        setIsSoirActive(true);
+        setLastSaved(null);
+      }
+      currentDraftKey.current = newDraftKey;
+    } else {
+      // Save draft when values change
+      const draft = {
+        paymentsMidi,
+        paymentsSoir,
+        notesMidi,
+        notesSoir,
+        isMidiActive,
+        isSoirActive,
+        timestamp: new Date().toISOString()
+      };
+      
+      const isInitial = 
+        JSON.stringify(paymentsMidi) === JSON.stringify(INITIAL_PAYMENTS) &&
+        JSON.stringify(paymentsSoir) === JSON.stringify(INITIAL_PAYMENTS) &&
+        !notesMidi && !notesSoir && isMidiActive && isSoirActive;
+        
+      if (success) {
+        localStorage.removeItem(newDraftKey);
+        setLastSaved(null);
+      } else if (!isInitial) {
+        localStorage.setItem(newDraftKey, JSON.stringify(draft));
+        setLastSaved(new Date());
+      } else {
+        localStorage.removeItem(newDraftKey);
+        setLastSaved(null);
+      }
+    }
+  }, [selectedEst, date, paymentsMidi, paymentsSoir, notesMidi, notesSoir, isMidiActive, isSoirActive, success]);
 
   useEffect(() => {
     localStorage.setItem('activePaymentMethods', JSON.stringify(activeMethods));
@@ -351,6 +413,11 @@ export function RevenueEntry() {
             {success && (
               <span className="flex items-center text-emerald-600 font-semibold text-sm">
                 <CheckCircle2 className="mr-1" size={18} /> Enregistré
+              </span>
+            )}
+            {!success && lastSaved && (
+              <span className="hidden sm:flex items-center text-slate-400 font-medium text-xs">
+                Brouillon sauvegardé à {format(lastSaved, 'HH:mm')}
               </span>
             )}
             <button
