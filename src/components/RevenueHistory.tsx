@@ -140,9 +140,9 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                   <td className="py-3 px-4">
                     {revenue.attachments && revenue.attachments.length > 0 ? (
                       <div className="flex -space-x-2">
-                        {revenue.attachments.slice(0, 3).map((att, idx) => (
+                        {revenue.attachments.slice(0, 3).map((att) => (
                           <a 
-                            key={idx} 
+                            key={att.url} 
                             href={att.url} 
                             target="_blank" 
                             rel="noopener noreferrer"

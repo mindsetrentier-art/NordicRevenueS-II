@@ -15,6 +15,8 @@ export interface Establishment {
   address?: string;
   city?: string;
   postalCode?: string;
+  latitude?: number;
+  longitude?: number;
   createdBy?: string;
   createdAt: Date;
   updatedAt?: Date;

@@ -511,7 +511,7 @@ export function Dashboard() {
             </div>
           </div>
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`dashboard-chart-${selectedEst}-${selectedService}-${startDate}-${endDate}`}>
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis 
@@ -548,10 +548,10 @@ export function Dashboard() {
               { label: 'Espèces', value: paymentBreakdown.cash, color: 'bg-emerald-500' },
               { label: 'AMEX', value: paymentBreakdown.amex, color: 'bg-purple-500' },
               { label: 'Virement', value: paymentBreakdown.transfer, color: 'bg-slate-400' },
-            ].map((item, index) => {
+            ].map((item) => {
               const percentage = totalPayments > 0 ? Math.round((item.value / totalPayments) * 100) : 0;
               return (
-                <div key={index}>
+                <div key={item.label}>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-slate-600 font-medium">{item.label}</span>
                     <span className="font-bold text-slate-900">{percentage}%</span>

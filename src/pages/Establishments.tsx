@@ -22,6 +22,9 @@ export function Establishments() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [latitude, setLatitude] = useState<number | undefined>();
+  const [longitude, setLongitude] = useState<number | undefined>();
+  const [isGeolocating, setIsGeolocating] = useState(false);
 
   const fetchEstablishments = useCallback(async () => {
     if (!userProfile) return;
@@ -77,6 +80,8 @@ export function Establishments() {
           address,
           city,
           postalCode,
+          latitude: latitude || null,
+          longitude: longitude || null,
           updatedAt: serverTimestamp()
         });
       } else {
@@ -85,6 +90,8 @@ export function Establishments() {
           address,
           city,
           postalCode,
+          latitude: latitude || null,
+          longitude: longitude || null,
           createdBy: userProfile.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -156,6 +163,8 @@ export function Establishments() {
     setAddress(est.address || '');
     setCity(est.city || '');
     setPostalCode(est.postalCode || '');
+    setLatitude(est.latitude);
+    setLongitude(est.longitude);
     setIsModalOpen(true);
   };
 
@@ -165,6 +174,29 @@ export function Establishments() {
     setAddress('');
     setCity('');
     setPostalCode('');
+    setLatitude(undefined);
+    setLongitude(undefined);
+  };
+
+  const handleGeolocate = () => {
+    if (!navigator.geolocation) {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      return;
+    }
+
+    setIsGeolocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLatitude(position.coords.latitude);
+        setLongitude(position.coords.longitude);
+        setIsGeolocating(false);
+      },
+      (error) => {
+        console.error("Error geolocating:", error);
+        alert("Impossible de vous géolocaliser. Veuillez vérifier vos permissions.");
+        setIsGeolocating(false);
+      }
+    );
   };
 
   if (!userProfile) {
@@ -316,6 +348,42 @@ export function Establishments() {
                     className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="Ex: Paris"
                   />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-slate-700">Coordonnées (Optionnel)</label>
+                  <button
+                    type="button"
+                    onClick={handleGeolocate}
+                    disabled={isGeolocating}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {isGeolocating ? 'Localisation...' : 'Me géolocaliser'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <input
+                      type="number"
+                      step="any"
+                      value={latitude || ''}
+                      onChange={(e) => setLatitude(e.target.value ? parseFloat(e.target.value) : undefined)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      placeholder="Latitude"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      step="any"
+                      value={longitude || ''}
+                      onChange={(e) => setLongitude(e.target.value ? parseFloat(e.target.value) : undefined)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      placeholder="Longitude"
+                    />
+                  </div>
                 </div>
               </div>
               

@@ -22,7 +22,7 @@ import {
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -77,6 +77,13 @@ export function Reports() {
   useEffect(() => {
     localStorage.setItem('reportsVisibleColumns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
+
+  // Reset selected establishment when searching globally
+  useEffect(() => {
+    if (searchQuery && selectedEst !== 'all') {
+      setSelectedEst('all');
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     const fetchEstablishments = async () => {
@@ -568,10 +575,30 @@ Généré par NordicRevenueS`;
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Rapports & Analyses</h1>
           <p className="text-slate-500 text-sm mt-1">Analysez vos performances financières et exportez vos données.</p>
+          
+          {/* Global Search Bar */}
+          <div className="mt-4 relative max-w-md">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom d'établissement..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -600,18 +627,6 @@ Généré par NordicRevenueS`;
             <Share2 size={16} /> Partager
           </button>
         </div>
-      </div>
-
-      {/* Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-        <Search size={20} className="text-slate-400" />
-        <input
-          type="text"
-          placeholder="Rechercher un établissement par nom..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-transparent border-none outline-none text-slate-900 placeholder:text-slate-400"
-        />
       </div>
 
       {/* Filters */}
@@ -828,7 +843,7 @@ Généré par NordicRevenueS`;
           <div id="report-main-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h3 className="text-lg font-bold text-slate-900 mb-6">Évolution du Chiffre d'Affaires</h3>
             <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`reports-main-chart-${startDate}-${endDate}-${selectedEst}`}>
                 <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
@@ -907,7 +922,7 @@ Généré par NordicRevenueS`;
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-lg font-bold text-slate-900 mb-6">Part de chaque moyen de paiement</h3>
               <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`reports-payment-pie-${startDate}-${endDate}-${selectedEst}`}>
                   <PieChart>
                     <Pie
                       data={paymentTotals}
@@ -944,7 +959,7 @@ Généré par NordicRevenueS`;
                 </button>
               </div>
               <div id="payment-chart-container" className="h-80 w-full bg-white p-2">
-                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`reports-payment-bar-${startDate}-${endDate}-${selectedEst}`}>
                   <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis 
@@ -1045,8 +1060,8 @@ Généré par NordicRevenueS`;
                   </tr>
                 </thead>
                 <tbody className="text-sm">
-                  {chartData.map((day, idx) => (
-                    <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                  {chartData.map((day) => (
+                    <tr key={day.date} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                       <td className="py-3 px-4 font-medium text-slate-900">{day.date}</td>
                       {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                       {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{day.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}

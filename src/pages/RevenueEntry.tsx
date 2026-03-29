@@ -25,7 +25,8 @@ import {
   Paperclip,
   Camera,
   FileText,
-  AlertCircle
+  AlertCircle,
+  MapPin
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Calculator } from '../components/Calculator';
@@ -79,6 +80,7 @@ export function RevenueEntry() {
   const [isSoirActive, setIsSoirActive] = useState(true);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGeolocating, setIsGeolocating] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const currentDraftKey = useRef<string>('');
@@ -184,6 +186,66 @@ export function RevenueEntry() {
 
     fetchEstablishments();
   }, [userProfile]);
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+  };
+
+  const deg2rad = (deg: number) => {
+    return deg * (Math.PI / 180);
+  };
+
+  const handleGeolocate = () => {
+    if (!navigator.geolocation) {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      return;
+    }
+
+    setIsGeolocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        if (establishments.length === 0) {
+          setIsGeolocating(false);
+          return;
+        }
+
+        let nearestEst = establishments[0];
+        let minDistance = Infinity;
+
+        establishments.forEach(est => {
+          if (est.latitude && est.longitude) {
+            const dist = calculateDistance(latitude, longitude, est.latitude, est.longitude);
+            if (dist < minDistance) {
+              minDistance = dist;
+              nearestEst = est;
+            }
+          }
+        });
+
+        if (minDistance !== Infinity) {
+          setSelectedEst(nearestEst.id);
+        } else {
+          alert("Aucun établissement n'a de coordonnées enregistrées pour la comparaison.");
+        }
+        setIsGeolocating(false);
+      },
+      (error) => {
+        console.error("Error geolocating:", error);
+        alert("Impossible de vous géolocaliser. Veuillez vérifier vos permissions.");
+        setIsGeolocating(false);
+      }
+    );
+  };
 
   const handleToggleMethod = (field: keyof Payments) => {
     setActiveMethods(prev => {
@@ -320,7 +382,18 @@ export function RevenueEntry() {
         {/* Header Config */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Établissement</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-semibold text-slate-700">Établissement</label>
+              <button
+                type="button"
+                onClick={handleGeolocate}
+                disabled={isGeolocating || establishments.length === 0}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+              >
+                <MapPin size={12} />
+                {isGeolocating ? 'Localisation...' : 'Plus proche'}
+              </button>
+            </div>
             {establishments.length === 0 ? (
               <div className="text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200 text-sm">
                 Aucun établissement disponible. Veuillez en créer un dans les paramètres.
@@ -479,6 +552,43 @@ function ServiceSection({
     setPayments(prev => ({ ...prev, [field]: isNaN(numValue) ? 0 : numValue }));
   };
 
+  const handleGroupTotalChange = (group: 'cb' | 'amex' | 'tr', totalValue: string) => {
+    if (!isActive) return;
+    const numTotal = totalValue === '' ? 0 : parseFloat(totalValue);
+    if (isNaN(numTotal)) return;
+
+    let fields: (keyof Payments)[] = [];
+    if (group === 'cb') fields = ['cb', 'cbContactless'];
+    else if (group === 'amex') fields = ['amex', 'amexContactless'];
+    else if (group === 'tr') fields = ['tr', 'trContactless'];
+
+    const activeFields = fields.filter(f => activeMethods[f]);
+    if (activeFields.length === 0) return;
+
+    const distributedValue = Number((numTotal / activeFields.length).toFixed(2));
+    
+    setPayments(prev => {
+      const next = { ...prev };
+      fields.forEach(f => {
+        next[f] = 0;
+      });
+      
+      activeFields.forEach(f => {
+        next[f] = distributedValue;
+      });
+      
+      // Adjust for rounding errors
+      const currentSum = activeFields.reduce((acc, f) => acc + distributedValue, 0);
+      const diff = numTotal - currentSum;
+      if (Math.abs(diff) > 0.001 && activeFields.length > 0) {
+        const lastField = activeFields[activeFields.length - 1];
+        next[lastField] = Number((next[lastField] + diff).toFixed(2));
+      }
+      
+      return next;
+    });
+  };
+
   return (
     <div className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col h-full transition-opacity ${!isActive ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
@@ -505,9 +615,25 @@ function ServiceSection({
       <div className={`space-y-8 flex-1 ${!isActive ? 'pointer-events-none' : ''}`}>
         {/* CB */}
         <div>
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
-            <CreditCard className="text-blue-600" size={16} /> Cartes Bancaires
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
+              <CreditCard className="text-blue-600" size={16} /> Cartes Bancaires
+            </h3>
+            <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+              <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">Total</span>
+              <div className="flex items-center">
+                <span className="text-blue-600 font-bold text-sm mr-1">€</span>
+                <input 
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-20 bg-transparent border-none p-0 text-sm font-black text-blue-700 focus:ring-0 placeholder:text-blue-200"
+                  value={(payments.cb + payments.cbContactless) || ''}
+                  onChange={(e) => handleGroupTotalChange('cb', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4">
             <PaymentInput 
               label="Paiement Carte" 
@@ -530,9 +656,25 @@ function ServiceSection({
 
         {/* AMEX */}
         <div>
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
-            <CreditCard className="text-amber-600" size={16} /> American Express
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
+              <CreditCard className="text-amber-600" size={16} /> American Express
+            </h3>
+            <div className="flex items-center gap-2 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
+              <span className="text-[10px] font-black text-amber-400 uppercase tracking-tighter">Total</span>
+              <div className="flex items-center">
+                <span className="text-amber-600 font-bold text-sm mr-1">€</span>
+                <input 
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-20 bg-transparent border-none p-0 text-sm font-black text-amber-700 focus:ring-0 placeholder:text-amber-200"
+                  value={(payments.amex + payments.amexContactless) || ''}
+                  onChange={(e) => handleGroupTotalChange('amex', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4">
             <PaymentInput 
               label="Carte AMEX" 
@@ -555,9 +697,25 @@ function ServiceSection({
 
         {/* TR */}
         <div>
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
-            <Receipt className="text-emerald-600" size={16} /> Titres-Restaurant
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
+              <Receipt className="text-emerald-600" size={16} /> Titres-Restaurant
+            </h3>
+            <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Total</span>
+              <div className="flex items-center">
+                <span className="text-emerald-600 font-bold text-sm mr-1">€</span>
+                <input 
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="w-20 bg-transparent border-none p-0 text-sm font-black text-emerald-700 focus:ring-0 placeholder:text-emerald-200"
+                  value={(payments.tr + payments.trContactless) || ''}
+                  onChange={(e) => handleGroupTotalChange('tr', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4">
             <PaymentInput 
               label="Carte TR" 

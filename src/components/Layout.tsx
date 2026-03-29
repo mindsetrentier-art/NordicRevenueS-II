@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -10,20 +10,18 @@ import {
   BarChart3, 
   Settings, 
   Bell,
-  LogOut,
-  Menu,
-  X
+  LogOut
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Logo } from './Logo';
 
 import { MusicPlayer } from './MusicPlayer';
+import { WeatherWidget } from './WeatherWidget';
 
 export function Layout() {
   const { userProfile, logout } = useAuth();
   const { themeColor } = useTheme();
   const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -41,33 +39,37 @@ export function Layout() {
 
   return (
     <div 
-      className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900 transition-colors duration-500"
+      className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900 transition-colors duration-500"
       style={{
         boxShadow: `inset 0 0 0 4px var(--theme-color), inset 0 0 20px 4px var(--theme-color-light)`
       }}
     >
       <MusicPlayer />
+      <WeatherWidget />
       {/* Mobile Header */}
-      <header className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
+      <header className="lg:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">
           <Logo className="w-8 h-8 rounded-lg shadow-sm" />
           <h1 className="font-bold text-lg tracking-tight">NordicRevenueS</h1>
         </div>
         <div className="flex items-center gap-2">
           <ThemePicker />
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          <button 
+            onClick={handleLogout} 
+            className="p-2 text-slate-600 hover:text-red-600 transition-colors"
+            title="Déconnexion"
+          >
+            <LogOut size={20} />
           </button>
         </div>
       </header>
 
-      {/* Sidebar */}
+      {/* Sidebar (Desktop only) */}
       <aside className={clsx(
-        "fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 flex flex-col",
-        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        "hidden lg:flex flex-col w-64 bg-white border-r border-slate-200 sticky top-0 h-screen z-30",
       )}>
-        <div className="p-6 hidden md:flex items-center gap-3">
-          <Logo className="w-10 h-10 rounded-xl shadow-md" />
+        <div className="p-6 flex items-center gap-3">
+          <Logo className="w-8 h-8 rounded-lg shadow-sm" />
           <h1 className="font-bold text-xl tracking-tight text-slate-900">NordicRevenueS</h1>
         </div>
 
@@ -76,7 +78,6 @@ export function Layout() {
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={() => setIsMobileMenuOpen(false)}
               className={({ isActive }) => clsx(
                 "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
                 isActive 
@@ -117,22 +118,33 @@ export function Layout() {
         </div>
       </aside>
 
-      {/* Overlay for mobile */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/50 z-20 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 pb-24 lg:pb-8">
           <div className="max-w-6xl mx-auto">
             <Outlet />
           </div>
         </div>
       </main>
+
+      {/* Bottom Navigation (Mobile only) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-transparent px-2 py-1 z-40 flex items-center justify-around">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => clsx(
+              "flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors min-w-[60px]",
+              isActive 
+                ? "text-blue-600" 
+                : "text-slate-500 hover:text-slate-900"
+            )}
+          >
+            <item.icon size={20} className={clsx("transition-transform", "active:scale-90")} />
+            <span className="text-[10px] font-medium truncate w-full text-center">{item.label.split(' ')[0]}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

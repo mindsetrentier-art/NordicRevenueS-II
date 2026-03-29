@@ -30,7 +30,7 @@ export function MusicPlayer() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const timerRef = React.useRef<NodeJS.Timeout>();
+  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const resetMinimizeTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
