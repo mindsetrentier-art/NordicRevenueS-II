@@ -31,6 +31,7 @@ import {
 import { format } from 'date-fns';
 import { Calculator } from '../components/Calculator';
 import { RevenueHistory } from '../components/RevenueHistory';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 const INITIAL_PAYMENTS: Payments = {
   cb: 0,
@@ -264,7 +265,11 @@ export function RevenueEntry() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEst || !userProfile) return;
+    if (!selectedEst) {
+      setError("Veuillez sélectionner un établissement.");
+      return;
+    }
+    if (!userProfile) return;
     
     setLoading(true);
     setSuccess(false);
@@ -399,17 +404,12 @@ export function RevenueEntry() {
                 Aucun établissement disponible. Veuillez en créer un dans les paramètres.
               </div>
             ) : (
-              <select
+              <SearchableSelect
+                options={establishments.map(est => ({ id: est.id, name: est.name }))}
                 value={selectedEst}
-                onChange={(e) => setSelectedEst(e.target.value)}
-                required
-                className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
-              >
-                <option value="" disabled>Sélectionnez un établissement</option>
-                {establishments.map(est => (
-                  <option key={est.id} value={est.id}>{est.name}</option>
-                ))}
-              </select>
+                onChange={setSelectedEst}
+                placeholder="Sélectionnez un établissement"
+              />
             )}
           </div>
           <div>
@@ -549,13 +549,14 @@ function ServiceSection({
   const handleInputChange = (field: keyof Payments, value: string) => {
     if (!activeMethods[field] || !isActive) return;
     const numValue = value === '' ? 0 : parseFloat(value);
+    if (numValue < 0) return;
     setPayments(prev => ({ ...prev, [field]: isNaN(numValue) ? 0 : numValue }));
   };
 
   const handleGroupTotalChange = (group: 'cb' | 'amex' | 'tr', totalValue: string) => {
     if (!isActive) return;
     const numTotal = totalValue === '' ? 0 : parseFloat(totalValue);
-    if (isNaN(numTotal)) return;
+    if (isNaN(numTotal) || numTotal < 0) return;
 
     let fields: (keyof Payments)[] = [];
     if (group === 'cb') fields = ['cb', 'cbContactless'];
@@ -835,6 +836,18 @@ function PaymentInput({
 }) {
   const [isListening, setIsListening] = useState(false);
   const [detectedAmount, setDetectedAmount] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [localValue, setLocalValue] = useState<string>(value === 0 ? '' : value.toString());
+
+  useEffect(() => {
+    if (value === 0 && localValue !== '') {
+      setLocalValue('');
+      setError(null);
+    } else if (value !== 0 && parseFloat(localValue) !== value) {
+      setLocalValue(value.toString());
+      setError(null);
+    }
+  }, [value]);
 
   const startListening = () => {
     if (!isActive) return;
@@ -854,6 +867,7 @@ function PaymentInput({
     recognition.onstart = () => {
       setIsListening(true);
       setDetectedAmount(null);
+      setError(null);
     };
 
     recognition.onresult = (event: any) => {
@@ -862,6 +876,8 @@ function PaymentInput({
       const match = cleaned.match(/\d+(\.\d+)?/);
       if (match) {
         setDetectedAmount(match[0]);
+      } else {
+        setError("Montant non reconnu.");
       }
     };
 
@@ -880,6 +896,22 @@ function PaymentInput({
     recognition.start();
   };
 
+  const handleChange = (val: string) => {
+    setLocalValue(val);
+    if (val === '') {
+      setError(null);
+      onChange(val);
+      return;
+    }
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0) {
+      setError("Montant invalide (doit être positif).");
+    } else {
+      setError(null);
+      onChange(val);
+    }
+  };
+
   return (
     <div className={`flex flex-col group ${!isActive ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 ml-1">
@@ -892,7 +924,7 @@ function PaymentInput({
           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-4' : 'translate-x-1'}`} />
         </button>
       </div>
-      <div className={`flex w-full items-stretch rounded-xl border-2 ${isActive ? (isListening ? 'border-blue-500 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:bg-white') : 'border-slate-200 bg-slate-100'} transition-all shadow-sm overflow-hidden relative`}>
+      <div className={`flex w-full items-stretch rounded-xl border-2 ${isActive ? (isListening ? 'border-blue-500 bg-white ring-2 ring-blue-500/20' : error ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:bg-white') : 'border-slate-200 bg-slate-100'} transition-all shadow-sm overflow-hidden relative`}>
         {detectedAmount !== null && (
           <div className="absolute inset-0 bg-blue-50 flex items-center justify-between px-4 z-10 animate-in fade-in zoom-in duration-200">
             <span className="text-blue-700 font-bold flex items-center gap-2">
@@ -911,7 +943,7 @@ function PaymentInput({
               <button 
                 type="button"
                 onClick={() => {
-                  onChange(detectedAmount);
+                  handleChange(detectedAmount);
                   setDetectedAmount(null);
                 }}
                 className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
@@ -922,30 +954,31 @@ function PaymentInput({
             </div>
           </div>
         )}
-        <span className="flex items-center pl-4 text-slate-400 font-bold">€</span>
+        <span className={`flex items-center pl-4 font-bold ${error ? 'text-red-400' : 'text-slate-400'}`}>€</span>
         <input 
           type="number" 
           step="0.01"
           min="0"
           disabled={!isActive}
-          value={value === 0 ? '' : value}
-          onChange={(e) => onChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => handleChange(e.target.value)}
           placeholder={isListening ? "Écoute..." : "0.00"}
-          className="w-full border-none bg-transparent h-12 text-lg font-bold text-slate-900 focus:ring-0 placeholder:text-slate-300 px-2 disabled:text-slate-400"
+          className={`w-full border-none bg-transparent h-12 text-lg font-bold focus:ring-0 px-2 disabled:text-slate-400 ${error ? 'text-red-700 placeholder:text-red-300' : 'text-slate-900 placeholder:text-slate-300'}`}
         />
         <button
           type="button"
           onClick={startListening}
           disabled={!isActive}
-          className={`flex items-center px-3 transition-colors border-l border-slate-200 ${isListening ? 'bg-blue-50 text-blue-600' : 'bg-slate-100/50 text-slate-400 hover:text-blue-600 hover:bg-slate-100'}`}
+          className={`flex items-center px-3 transition-colors border-l ${error ? 'border-red-200' : 'border-slate-200'} ${isListening ? 'bg-blue-50 text-blue-600' : error ? 'bg-red-100/50 text-red-400 hover:text-red-600' : 'bg-slate-100/50 text-slate-400 hover:text-blue-600 hover:bg-slate-100'}`}
           title="Saisie vocale"
         >
           <Mic className={isListening ? 'animate-pulse' : ''} size={18} />
         </button>
-        <div className="flex items-center px-3 text-slate-400 bg-slate-100/50 border-l border-slate-200">
+        <div className={`flex items-center px-3 bg-slate-100/50 border-l ${error ? 'border-red-200 text-red-400 bg-red-50' : 'border-slate-200 text-slate-400'}`}>
           {icon}
         </div>
       </div>
+      {error && <p className="text-xs text-red-500 mt-1.5 ml-1 font-medium">{error}</p>}
     </div>
   );
 }

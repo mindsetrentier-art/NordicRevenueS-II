@@ -18,9 +18,10 @@ import {
   Line,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  Sector
 } from 'recharts';
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays } from 'date-fns';
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays, eachMonthOfInterval, differenceInMonths, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight, X } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -28,13 +29,110 @@ import html2canvas from 'html2canvas';
 
 type Period = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
+const renderActiveShape = (props: any) => {
+  const RADIAN = Math.PI / 180;
+  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+  const sx = cx + (outerRadius + 10) * cos;
+  const sy = cy + (outerRadius + 10) * sin;
+  const mx = cx + (outerRadius + 30) * cos;
+  const my = cy + (outerRadius + 30) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+  const ey = my;
+  const textAnchor = cos >= 0 ? 'start' : 'end';
+
+  return (
+    <g>
+      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} className="font-bold text-lg">
+        {payload.name}
+      </text>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        innerRadius={outerRadius + 6}
+        outerRadius={outerRadius + 10}
+        fill={fill}
+      />
+      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
+      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333" className="font-medium">{`${value.toFixed(2)} €`}</text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999" className="text-xs">
+        {`(${(percent * 100).toFixed(1)}%)`}
+      </text>
+    </g>
+  );
+};
+
+const CustomLineTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-100 min-w-[200px]">
+        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{label}</p>
+        {payload.map((entry: any, index: number) => {
+          const isNoEntry = entry.name === 'Période Actuelle' ? entry.payload.hasEntries === false : entry.payload.compHasEntries === false;
+          
+          return (
+            <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-sm mt-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-slate-600 font-medium">{entry.name}</span>
+              </div>
+              <span className={`font-bold ${isNoEntry ? 'text-slate-400 italic' : 'text-slate-900'}`}>
+                {isNoEntry ? 'Aucune saisie' : `${Number(entry.value).toFixed(2)} €`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomBarTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-100 min-w-[200px]">
+        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{label}</p>
+        {payload.map((entry: any, index: number) => {
+          if (!entry.value) return null;
+          return (
+            <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-sm mt-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-slate-600 font-medium">{entry.name}</span>
+              </div>
+              <span className="font-bold text-slate-900">
+                {Number(entry.value).toFixed(2)} €
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 export function Reports() {
   const { userProfile } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEst, setSelectedEst] = useState<string>('all');
   const [selectedService, setSelectedService] = useState<string>('all');
-  const [period, setPeriod] = useState<Period>('weekly');
+  const [period, setPeriod] = useState<Period>('daily');
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [compareMode, setCompareMode] = useState<'none' | 'previous_period' | 'previous_year'>('none');
@@ -42,6 +140,7 @@ export function Reports() {
   const [compRevenues, setCompRevenues] = useState<Revenue[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [activePieIndex, setActivePieIndex] = useState<number>(0);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     const saved = localStorage.getItem('reportsVisibleColumns');
     if (saved) {
@@ -60,6 +159,17 @@ export function Reports() {
       transfer: true
     };
   });
+  const [visibleChartPayments, setVisibleChartPayments] = useState({
+    cb: true,
+    cbContactless: true,
+    amex: true,
+    amexContactless: true,
+    tr: true,
+    trContactless: true,
+    cash: true,
+    transfer: true
+  });
+  const [showChartPaymentSelector, setShowChartPaymentSelector] = useState(false);
   const [exportOptions, setExportOptions] = useState({
     comparison: true,
     kpis: true,
@@ -242,16 +352,19 @@ export function Reports() {
   const setThisWeek = () => {
     setStartDate(format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
     setEndDate(format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+    setPeriod('daily');
   };
 
   const setThisMonth = () => {
     setStartDate(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
     setEndDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+    setPeriod('daily');
   };
 
   const setThisYear = () => {
     setStartDate(format(startOfYear(new Date()), 'yyyy-MM-dd'));
     setEndDate(format(endOfYear(new Date()), 'yyyy-MM-dd'));
+    setPeriod('monthly');
   };
 
   const generatePDF = async () => {
@@ -378,23 +491,35 @@ export function Reports() {
   };
 
   // Prepare data for charts
-  const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
+  const timeIntervals = period === 'monthly' 
+    ? eachMonthOfInterval({ start: parseISO(startDate), end: parseISO(endDate) })
+    : eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-  const chartData = days.map((day, index) => {
-    const dateStr = format(day, 'yyyy-MM-dd');
-    const displayDate = format(day, 'dd MMM', { locale: fr });
+  const chartData = timeIntervals.map((intervalDate, index) => {
+    let currentPeriodRevs;
+    let displayDate;
+    let dateStr;
     
-    const currentDayRevs = filteredRevenues.filter(r => r.date === dateStr);
-    const hasEntries = currentDayRevs.length > 0;
-    const total = currentDayRevs.reduce((sum, r) => sum + r.total, 0);
-    const cb = currentDayRevs.reduce((sum, r) => sum + r.payments.cb, 0);
-    const cbContactless = currentDayRevs.reduce((sum, r) => sum + r.payments.cbContactless, 0);
-    const cash = currentDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
-    const tr = currentDayRevs.reduce((sum, r) => sum + r.payments.tr, 0);
-    const trContactless = currentDayRevs.reduce((sum, r) => sum + r.payments.trContactless, 0);
-    const amex = currentDayRevs.reduce((sum, r) => sum + r.payments.amex, 0);
-    const amexContactless = currentDayRevs.reduce((sum, r) => sum + r.payments.amexContactless, 0);
-    const transfer = currentDayRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
+    if (period === 'monthly') {
+      dateStr = format(intervalDate, 'yyyy-MM');
+      displayDate = format(intervalDate, 'MMM yyyy', { locale: fr });
+      currentPeriodRevs = filteredRevenues.filter(r => r.date.startsWith(dateStr));
+    } else {
+      dateStr = format(intervalDate, 'yyyy-MM-dd');
+      displayDate = format(intervalDate, 'dd MMM', { locale: fr });
+      currentPeriodRevs = filteredRevenues.filter(r => r.date === dateStr);
+    }
+    
+    const hasEntries = currentPeriodRevs.length > 0;
+    const total = currentPeriodRevs.reduce((sum, r) => sum + r.total, 0);
+    const cb = currentPeriodRevs.reduce((sum, r) => sum + r.payments.cb, 0);
+    const cbContactless = currentPeriodRevs.reduce((sum, r) => sum + r.payments.cbContactless, 0);
+    const cash = currentPeriodRevs.reduce((sum, r) => sum + r.payments.cash, 0);
+    const tr = currentPeriodRevs.reduce((sum, r) => sum + r.payments.tr, 0);
+    const trContactless = currentPeriodRevs.reduce((sum, r) => sum + r.payments.trContactless, 0);
+    const amex = currentPeriodRevs.reduce((sum, r) => sum + r.payments.amex, 0);
+    const amexContactless = currentPeriodRevs.reduce((sum, r) => sum + r.payments.amexContactless, 0);
+    const transfer = currentPeriodRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
 
     let compTotal = undefined;
     let compCb = undefined;
@@ -408,32 +533,48 @@ export function Reports() {
     let compHasEntries = undefined;
 
     if (compareMode !== 'none') {
-      let compDateStr = '';
+      let compPeriodRevs: Revenue[] = [];
+      
       if (compareMode === 'previous_period') {
-        const daysDiff = differenceInDays(parseISO(endDate), parseISO(startDate));
-        const compEndDate = subDays(parseISO(startDate), 1);
-        const compStartDate = subDays(compEndDate, daysDiff);
-        const compDays = eachDayOfInterval({ start: compStartDate, end: compEndDate });
-        if (compDays[index]) {
-          compDateStr = format(compDays[index], 'yyyy-MM-dd');
+        if (period === 'monthly') {
+           const monthsDiff = differenceInMonths(parseISO(endDate), parseISO(startDate));
+           const compEndDate = subMonths(parseISO(startDate), 1);
+           const compStartDate = subMonths(compEndDate, monthsDiff);
+           const compMonths = eachMonthOfInterval({ start: compStartDate, end: compEndDate });
+           if (compMonths[index]) {
+             const compMonthStr = format(compMonths[index], 'yyyy-MM');
+             compPeriodRevs = filteredCompRevenues.filter(r => r.date.startsWith(compMonthStr));
+           }
+        } else {
+           const daysDiff = differenceInDays(parseISO(endDate), parseISO(startDate));
+           const compEndDate = subDays(parseISO(startDate), 1);
+           const compStartDate = subDays(compEndDate, daysDiff);
+           const compDays = eachDayOfInterval({ start: compStartDate, end: compEndDate });
+           if (compDays[index]) {
+             const compDateStr = format(compDays[index], 'yyyy-MM-dd');
+             compPeriodRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
+           }
         }
       } else if (compareMode === 'previous_year') {
-        compDateStr = format(subYears(day, 1), 'yyyy-MM-dd');
+        if (period === 'monthly') {
+          const compMonthStr = format(subYears(intervalDate, 1), 'yyyy-MM');
+          compPeriodRevs = filteredCompRevenues.filter(r => r.date.startsWith(compMonthStr));
+        } else {
+          const compDateStr = format(subYears(intervalDate, 1), 'yyyy-MM-dd');
+          compPeriodRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
+        }
       }
       
-      if (compDateStr) {
-        const compDayRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
-        compHasEntries = compDayRevs.length > 0;
-        compTotal = compDayRevs.reduce((sum, r) => sum + r.total, 0);
-        compCb = compDayRevs.reduce((sum, r) => sum + r.payments.cb, 0);
-        compCbContactless = compDayRevs.reduce((sum, r) => sum + r.payments.cbContactless, 0);
-        compCash = compDayRevs.reduce((sum, r) => sum + r.payments.cash, 0);
-        compTr = compDayRevs.reduce((sum, r) => sum + r.payments.tr, 0);
-        compTrContactless = compDayRevs.reduce((sum, r) => sum + r.payments.trContactless, 0);
-        compAmex = compDayRevs.reduce((sum, r) => sum + r.payments.amex, 0);
-        compAmexContactless = compDayRevs.reduce((sum, r) => sum + r.payments.amexContactless, 0);
-        compTransfer = compDayRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
-      }
+      compHasEntries = compPeriodRevs.length > 0;
+      compTotal = compPeriodRevs.reduce((sum, r) => sum + r.total, 0);
+      compCb = compPeriodRevs.reduce((sum, r) => sum + r.payments.cb, 0);
+      compCbContactless = compPeriodRevs.reduce((sum, r) => sum + r.payments.cbContactless, 0);
+      compCash = compPeriodRevs.reduce((sum, r) => sum + r.payments.cash, 0);
+      compTr = compPeriodRevs.reduce((sum, r) => sum + r.payments.tr, 0);
+      compTrContactless = compPeriodRevs.reduce((sum, r) => sum + r.payments.trContactless, 0);
+      compAmex = compPeriodRevs.reduce((sum, r) => sum + r.payments.amex, 0);
+      compAmexContactless = compPeriodRevs.reduce((sum, r) => sum + r.payments.amexContactless, 0);
+      compTransfer = compPeriodRevs.reduce((sum, r) => sum + r.payments.transfer, 0);
     }
 
     return {
@@ -486,15 +627,15 @@ export function Reports() {
   const transferTotal = chartData.reduce((sum, d) => sum + d.transfer, 0);
 
   const paymentTotals = [
-    { name: 'CB', value: cbTotal, color: '#3b82f6' },
-    { name: 'CB SC', value: cbContactlessTotal, color: '#60a5fa' },
-    { name: 'AMEX', value: amexTotal, color: '#f59e0b' },
-    { name: 'AMEX SC', value: amexContactlessTotal, color: '#fbbf24' },
-    { name: 'TR', value: trTotal, color: '#10b981' },
-    { name: 'TR SC', value: trContactlessTotal, color: '#34d399' },
-    { name: 'Espèces', value: cashTotal, color: '#8b5cf6' },
-    { name: 'Virement', value: transferTotal, color: '#64748b' },
-  ].filter(item => item.value > 0);
+    { id: 'cb', name: 'CB', value: cbTotal, color: '#3b82f6' },
+    { id: 'cbContactless', name: 'CB SC', value: cbContactlessTotal, color: '#60a5fa' },
+    { id: 'amex', name: 'AMEX', value: amexTotal, color: '#f59e0b' },
+    { id: 'amexContactless', name: 'AMEX SC', value: amexContactlessTotal, color: '#fbbf24' },
+    { id: 'tr', name: 'TR', value: trTotal, color: '#10b981' },
+    { id: 'trContactless', name: 'TR SC', value: trContactlessTotal, color: '#34d399' },
+    { id: 'cash', name: 'Espèces', value: cashTotal, color: '#8b5cf6' },
+    { id: 'transfer', name: 'Virement', value: transferTotal, color: '#64748b' },
+  ].filter(item => item.value > 0 && visibleChartPayments[item.id as keyof typeof visibleChartPayments]);
 
   const sendByEmail = () => {
     const formatCurrency = (val: number) => val.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -719,6 +860,20 @@ Généré par NordicRevenueS`;
 
         <div className="flex-1">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+            <Columns size={14} /> Affichage
+          </label>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as Period)}
+            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="daily">Quotidien</option>
+            <option value="monthly">Mensuel</option>
+          </select>
+        </div>
+
+        <div className="flex-1">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
             <TrendingUp size={14} /> Comparer à
           </label>
           <select
@@ -859,19 +1014,7 @@ Généré par NordicRevenueS`;
                     tick={{ fill: '#64748b', fontSize: 12 }}
                     tickFormatter={(value) => `${value}€`}
                   />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number, name: string, props: any) => {
-                      if (name === 'Période Actuelle' && props.payload.hasEntries === false) {
-                        return ['Aucune saisie', name];
-                      }
-                      if (name === 'Comparaison' && props.payload.compHasEntries === false) {
-                        return ['Aucune saisie', name];
-                      }
-                      if (name === 'compTotal') return [`${value.toFixed(2)} €`, 'Comparaison'];
-                      return [`${value.toFixed(2)} €`, name === 'total' ? 'Total' : name];
-                    }}
-                  />
+                  <Tooltip content={<CustomLineTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 2, strokeDasharray: '5 5' }} />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
                   <Line 
                     type="monotone" 
@@ -920,21 +1063,74 @@ Généré par NordicRevenueS`;
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Payment Breakdown Pie Chart */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 mb-6">Part de chaque moyen de paiement</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-slate-900">Part de chaque moyen de paiement</h3>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowChartPaymentSelector(!showChartPaymentSelector)}
+                    className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
+                  >
+                    <Filter size={14} /> Filtrer
+                  </button>
+                  {showChartPaymentSelector && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowChartPaymentSelector(false)} />
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 z-20 p-2">
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                          <input type="checkbox" checked={visibleChartPayments.cb} onChange={(e) => setVisibleChartPayments(p => ({...p, cb: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-700">CB</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
+                          <input type="checkbox" checked={visibleChartPayments.cbContactless} onChange={(e) => setVisibleChartPayments(p => ({...p, cbContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-600">CB Sans Contact</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                          <input type="checkbox" checked={visibleChartPayments.amex} onChange={(e) => setVisibleChartPayments(p => ({...p, amex: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-700">AMEX</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
+                          <input type="checkbox" checked={visibleChartPayments.amexContactless} onChange={(e) => setVisibleChartPayments(p => ({...p, amexContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-600">AMEX Sans Contact</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                          <input type="checkbox" checked={visibleChartPayments.tr} onChange={(e) => setVisibleChartPayments(p => ({...p, tr: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-700">TR</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
+                          <input type="checkbox" checked={visibleChartPayments.trContactless} onChange={(e) => setVisibleChartPayments(p => ({...p, trContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-600">TR Sans Contact</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                          <input type="checkbox" checked={visibleChartPayments.cash} onChange={(e) => setVisibleChartPayments(p => ({...p, cash: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-700">Espèces</span>
+                        </label>
+                        <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                          <input type="checkbox" checked={visibleChartPayments.transfer} onChange={(e) => setVisibleChartPayments(p => ({...p, transfer: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-medium text-slate-700">Virement</span>
+                        </label>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
               <div className="h-80 w-full">
                 <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`reports-payment-pie-${startDate}-${endDate}-${selectedEst}`}>
                   <PieChart>
                     <Pie
+                      activeIndex={activePieIndex}
+                      activeShape={renderActiveShape}
                       data={paymentTotals}
                       cx="50%"
                       cy="50%"
-                      innerRadius={80}
-                      outerRadius={120}
+                      innerRadius={60}
+                      outerRadius={90}
                       paddingAngle={5}
                       dataKey="value"
+                      onMouseEnter={(_, index) => setActivePieIndex(index)}
+                      onClick={(_, index) => setActivePieIndex(index)}
                     >
                       {paymentTotals.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell key={`cell-${index}`} fill={entry.color} className="cursor-pointer outline-none" />
                       ))}
                     </Pie>
                     <Tooltip 
@@ -975,16 +1171,16 @@ Généré par NordicRevenueS`;
                       tick={{ fill: '#64748b', fontSize: 12 }}
                       tickFormatter={(value) => `${value}€`}
                     />
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      formatter={(value: number) => `${value.toFixed(2)} €`}
-                    />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: '#f1f5f9' }} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                    <Bar dataKey="cb" name="CB" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="amex" name="AMEX" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="tr" name="TR" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="transfer" name="Virement" fill="#64748b" radius={[4, 4, 0, 0]} />
+                    {visibleChartPayments.cb && <Bar dataKey="cb" name="CB" fill="#3b82f6" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.cbContactless && <Bar dataKey="cbContactless" name="CB SC" fill="#60a5fa" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.amex && <Bar dataKey="amex" name="AMEX" fill="#f59e0b" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.amexContactless && <Bar dataKey="amexContactless" name="AMEX SC" fill="#fbbf24" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.tr && <Bar dataKey="tr" name="TR" fill="#10b981" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.trContactless && <Bar dataKey="trContactless" name="TR SC" fill="#34d399" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.cash && <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.transfer && <Bar dataKey="transfer" name="Virement" fill="#64748b" radius={[4, 4, 0, 0]} />}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -994,7 +1190,9 @@ Généré par NordicRevenueS`;
           {/* Daily Breakdown Table */}
           <div id="report-daily-table" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-900">Détail Journalier des Paiements</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                Détail {period === 'monthly' ? 'Mensuel' : 'Journalier'} des Paiements
+              </h3>
               <div className="relative">
                 <button
                   onClick={() => setShowColumnSelector(!showColumnSelector)}
@@ -1047,7 +1245,7 @@ Généré par NordicRevenueS`;
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                   <tr className="border-b border-slate-200 text-sm text-slate-500">
-                    <th className="py-3 px-4 font-semibold">Date</th>
+                    <th className="py-3 px-4 font-semibold text-left">Période</th>
                     {visibleColumns.cb && <th className="py-3 px-4 font-semibold text-right">CB</th>}
                     {visibleColumns.cbContactless && <th className="py-3 px-4 font-semibold text-right">CB SC</th>}
                     {visibleColumns.amex && <th className="py-3 px-4 font-semibold text-right">AMEX</th>}

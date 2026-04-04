@@ -4,8 +4,8 @@ import { db } from '../firebase';
 import { Revenue, Payments } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar } from 'lucide-react';
+import { format, parseISO, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface RevenueHistoryProps {
@@ -19,19 +19,49 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
   const [editingRevenue, setEditingRevenue] = useState<Revenue | null>(null);
   const [deletingRevenue, setDeletingRevenue] = useState<Revenue | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterPeriod, setFilterPeriod] = useState<'30days' | 'thisMonth' | 'lastMonth' | 'custom' | 'all'>('30days');
+  const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    const today = new Date();
+    switch (filterPeriod) {
+      case '30days':
+        setStartDate(format(subDays(today, 30), 'yyyy-MM-dd'));
+        setEndDate(format(today, 'yyyy-MM-dd'));
+        break;
+      case 'thisMonth':
+        setStartDate(format(startOfMonth(today), 'yyyy-MM-dd'));
+        setEndDate(format(endOfMonth(today), 'yyyy-MM-dd'));
+        break;
+      case 'lastMonth':
+        const lastMonth = subMonths(today, 1);
+        setStartDate(format(startOfMonth(lastMonth), 'yyyy-MM-dd'));
+        setEndDate(format(endOfMonth(lastMonth), 'yyyy-MM-dd'));
+        break;
+    }
+  }, [filterPeriod]);
 
   useEffect(() => {
     const fetchRevenues = async () => {
       if (!establishmentId) return;
       setLoading(true);
       try {
-        const q = query(
+        let q = query(
           collection(db, 'revenues'),
-          where('establishmentId', '==', establishmentId),
-          orderBy('date', 'desc'),
-          limit(30)
+          where('establishmentId', '==', establishmentId)
         );
+
+        if (filterPeriod !== 'all') {
+          q = query(q, 
+            where('date', '>=', startDate),
+            where('date', '<=', endDate)
+          );
+        }
+
+        q = query(q, orderBy('date', 'desc'), limit(100));
+        
         const snap = await getDocs(q);
         const data = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Revenue));
         setRevenues(data);
@@ -44,7 +74,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
     };
 
     fetchRevenues();
-  }, [establishmentId, refreshTrigger]);
+  }, [establishmentId, refreshTrigger, filterPeriod, startDate, endDate]);
 
   const handleDelete = async () => {
     if (!deletingRevenue) return;
@@ -102,7 +132,44 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
 
   return (
     <div className="mt-12 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-      <h2 className="text-lg font-bold text-slate-900 mb-6">Historique récent (30 dernières saisies)</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <h2 className="text-lg font-bold text-slate-900">Historique des saisies</h2>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
+            <Filter size={16} className="text-slate-400 ml-2" />
+            <select
+              value={filterPeriod}
+              onChange={(e) => setFilterPeriod(e.target.value as any)}
+              className="bg-transparent border-none text-sm font-medium text-slate-700 py-1.5 pl-1 pr-8 focus:ring-0 cursor-pointer outline-none"
+            >
+              <option value="30days">30 derniers jours</option>
+              <option value="thisMonth">Ce mois</option>
+              <option value="lastMonth">Mois dernier</option>
+              <option value="custom">Période personnalisée</option>
+              <option value="all">Toutes les saisies (100 max)</option>
+            </select>
+          </div>
+
+          {filterPeriod === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-slate-400">-</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+        </div>
+      </div>
       
       {loading ? (
         <div className="text-center py-8 text-slate-500">Chargement de l'historique...</div>

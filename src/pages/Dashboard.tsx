@@ -35,8 +35,17 @@ import { format, subDays, isSameDay, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import clsx from 'clsx';
 import { AIInsights } from '../components/AIInsights';
+import { SearchableSelect } from '../components/SearchableSelect';
 
-const TrendBadge = ({ value, isPercentagePoint = false }: { value: number, isPercentagePoint?: boolean }) => {
+const TrendBadge = ({ value, isPercentagePoint = false }: { value: number | null, isPercentagePoint?: boolean }) => {
+  if (value === null) {
+    return (
+      <span className="flex items-center text-slate-500 text-sm font-semibold bg-slate-50 px-2 py-1 rounded-lg" title="Période précédente à zéro">
+        N/A
+      </span>
+    );
+  }
+  
   if (value === 0 || isNaN(value) || !isFinite(value)) {
     return (
       <span className="flex items-center text-slate-500 text-sm font-semibold bg-slate-50 px-2 py-1 rounded-lg">
@@ -183,7 +192,7 @@ export function Dashboard() {
   
   const revenueChange = prevTotalRevenue > 0 
     ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100 
-    : (totalRevenue > 0 ? 100 : 0);
+    : (totalRevenue > 0 ? null : 0);
   
   // Group by date for chart
   const chartData = filteredRevenues.reduce((acc, curr) => {
@@ -327,40 +336,30 @@ export function Dashboard() {
               className="text-sm text-slate-700 outline-none bg-transparent"
             />
           </div>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Store size={16} className="text-slate-400" />
-            </div>
-            <select
+          <div className="relative w-full sm:w-64">
+            <SearchableSelect
+              options={[
+                { id: 'all', name: 'Tous les établissements' },
+                ...establishments.map(est => ({ id: est.id, name: est.name }))
+              ]}
               value={selectedEst}
-              onChange={(e) => setSelectedEst(e.target.value)}
-              className="bg-white border border-slate-200 text-slate-700 rounded-xl pl-10 pr-10 py-2.5 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow appearance-none"
-            >
-              <option value="all">Tous les établissements</option>
-              {establishments.map(est => (
-                <option key={est.id} value={est.id}>{est.name}</option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              <ChevronDown size={16} className="text-slate-400" />
-            </div>
+              onChange={setSelectedEst}
+              placeholder="Sélectionner un établissement"
+              icon={<Store size={16} />}
+            />
           </div>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Clock size={16} className="text-slate-400" />
-            </div>
-            <select
+          <div className="relative w-full sm:w-48">
+            <SearchableSelect
+              options={[
+                { id: 'all', name: 'Tous les services' },
+                { id: 'midi', name: 'Midi' },
+                { id: 'soir', name: 'Soir' }
+              ]}
               value={selectedService}
-              onChange={(e) => setSelectedService(e.target.value)}
-              className="bg-white border border-slate-200 text-slate-700 rounded-xl pl-10 pr-10 py-2.5 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow appearance-none"
-            >
-              <option value="all">Tous les services</option>
-              <option value="midi">Midi</option>
-              <option value="soir">Soir</option>
-            </select>
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              <ChevronDown size={16} className="text-slate-400" />
-            </div>
+              onChange={setSelectedService}
+              placeholder="Sélectionner un service"
+              icon={<Clock size={16} />}
+            />
           </div>
         </div>
       </div>

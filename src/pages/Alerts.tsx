@@ -24,6 +24,7 @@ export function Alerts() {
   const [type, setType] = useState<AlertType>('revenue_drop');
   const [establishmentId, setEstablishmentId] = useState('all');
   const [threshold, setThreshold] = useState<number | ''>('');
+  const [thresholdError, setThresholdError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<keyof Payments>('cb');
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [isActive, setIsActive] = useState(true);
@@ -92,6 +93,8 @@ export function Alerts() {
       setTimeframe('daily');
       setIsActive(true);
     }
+    setError(null);
+    setThresholdError(null);
     setIsModalOpen(true);
   };
 
@@ -100,10 +103,32 @@ export function Alerts() {
     setEditingAlert(null);
   };
 
+  const handleThresholdChange = (val: string) => {
+    if (val === '') {
+      setThreshold('');
+      setThresholdError('Le seuil est requis.');
+      return;
+    }
+    const num = Number(val);
+    if (isNaN(num) || num <= 0) {
+      setThresholdError('Le seuil doit être un nombre strictement positif.');
+      setThreshold(val as any); // Keep the invalid value in input so user can correct it
+    } else {
+      setThresholdError(null);
+      setThreshold(num);
+    }
+  };
+
   const saveAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
     setError(null);
+
+    const numThreshold = Number(threshold);
+    if (isNaN(numThreshold) || numThreshold <= 0) {
+      setThresholdError("Veuillez entrer un seuil valide et positif.");
+      return;
+    }
 
     try {
       const alertData = {
@@ -111,7 +136,7 @@ export function Alerts() {
         name,
         type,
         establishmentId,
-        threshold: Number(threshold),
+        threshold: numThreshold,
         paymentMethod: type === 'payment_method_change' ? paymentMethod : null,
         timeframe,
         isActive,
@@ -506,22 +531,26 @@ export function Alerts() {
                   <input 
                     type="number" 
                     required
-                    min="0"
+                    min="0.01"
                     step={type === 'revenue_drop' ? "10" : "1"}
                     value={threshold}
-                    onChange={(e) => setThreshold(e.target.value ? Number(e.target.value) : '')}
+                    onChange={(e) => handleThresholdChange(e.target.value)}
                     placeholder={type === 'revenue_drop' ? "Ex: 1000" : "Ex: 20"}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className={`w-full bg-slate-50 border ${thresholdError ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'} text-slate-900 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 outline-none`}
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                  <span className={`absolute right-4 top-1/2 -translate-y-1/2 font-medium ${thresholdError ? 'text-red-400' : 'text-slate-400'}`}>
                     {type === 'revenue_drop' ? '€' : '%'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  {type === 'revenue_drop' 
-                    ? 'Vous serez alerté si le CA est inférieur à ce montant.' 
-                    : 'Vous serez alerté si l\'utilisation varie de plus de ce pourcentage (à la hausse ou à la baisse).'}
-                </p>
+                {thresholdError ? (
+                  <p className="text-xs text-red-500 mt-1.5 font-medium">{thresholdError}</p>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-1">
+                    {type === 'revenue_drop' 
+                      ? 'Vous serez alerté si le CA est inférieur à ce montant.' 
+                      : 'Vous serez alerté si l\'utilisation varie de plus de ce pourcentage (à la hausse ou à la baisse).'}
+                  </p>
+                )}
               </div>
 
               <div>
