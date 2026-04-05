@@ -80,6 +80,7 @@ export function RevenueEntry() {
   const [isMidiActive, setIsMidiActive] = useState(true);
   const [isSoirActive, setIsSoirActive] = useState(true);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [activePaymentField, setActivePaymentField] = useState<{ service: 'midi' | 'soir', field: keyof Payments } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -431,6 +432,8 @@ export function RevenueEntry() {
             icon={<Sun className="text-amber-500" size={24} />}
             payments={paymentsMidi}
             setPayments={setPaymentsMidi}
+            activePaymentField={activePaymentField}
+            setActivePaymentField={(field) => setActivePaymentField({ service: 'midi', field })}
             notes={notesMidi}
             setNotes={setNotesMidi}
             attachments={attachmentsMidi}
@@ -455,6 +458,8 @@ export function RevenueEntry() {
             icon={<Moon className="text-indigo-500" size={24} />}
             payments={paymentsSoir}
             setPayments={setPaymentsSoir}
+            activePaymentField={activePaymentField}
+            setActivePaymentField={(field) => setActivePaymentField({ service: 'soir', field })}
             notes={notesSoir}
             setNotes={setNotesSoir}
             attachments={attachmentsSoir}
@@ -509,7 +514,28 @@ export function RevenueEntry() {
       </form>
 
       {isCalculatorOpen && (
-        <Calculator onClose={() => setIsCalculatorOpen(false)} />
+        <Calculator 
+          onClose={() => setIsCalculatorOpen(false)} 
+          activePaymentType={activePaymentField?.field}
+          initialValue={activePaymentField ? (activePaymentField.service === 'midi' ? paymentsMidi[activePaymentField.field] : paymentsSoir[activePaymentField.field]).toString() : '0'}
+          onPaymentTypeSelect={(type) => {
+            if (activePaymentField) {
+              setActivePaymentField({ ...activePaymentField, field: type as keyof Payments });
+            } else {
+              setActivePaymentField({ service: 'midi', field: type as keyof Payments });
+            }
+          }}
+          onApply={(value) => {
+            if (activePaymentField) {
+              const { service, field } = activePaymentField;
+              if (service === 'midi') {
+                setPaymentsMidi(prev => ({ ...prev, [field]: value }));
+              } else {
+                setPaymentsSoir(prev => ({ ...prev, [field]: value }));
+              }
+            }
+          }}
+        />
       )}
 
       <RevenueHistory establishmentId={selectedEst} refreshTrigger={refreshTrigger} />
@@ -522,6 +548,8 @@ function ServiceSection({
   icon,
   payments,
   setPayments,
+  activePaymentField,
+  setActivePaymentField,
   notes,
   setNotes,
   attachments,
@@ -536,6 +564,8 @@ function ServiceSection({
   icon: React.ReactNode;
   payments: Payments;
   setPayments: React.Dispatch<React.SetStateAction<Payments>>;
+  activePaymentField: { service: 'midi' | 'soir', field: keyof Payments } | null;
+  setActivePaymentField: (field: keyof Payments) => void;
   notes: string;
   setNotes: React.Dispatch<React.SetStateAction<string>>;
   attachments: File[];
@@ -640,6 +670,7 @@ function ServiceSection({
               label="Paiement Carte" 
               value={payments.cb} 
               onChange={(v) => handleInputChange('cb', v)} 
+              onFocus={() => setActivePaymentField('cb')}
               icon={<CreditCard size={20} />} 
               isActive={activeMethods.cb}
               onToggle={() => onToggleMethod('cb')}
@@ -648,6 +679,7 @@ function ServiceSection({
               label="Carte Sans Contact" 
               value={payments.cbContactless} 
               onChange={(v) => handleInputChange('cbContactless', v)} 
+              onFocus={() => setActivePaymentField('cbContactless')}
               icon={<Nfc size={20} />} 
               isActive={activeMethods.cbContactless}
               onToggle={() => onToggleMethod('cbContactless')}
@@ -681,6 +713,7 @@ function ServiceSection({
               label="Carte AMEX" 
               value={payments.amex} 
               onChange={(v) => handleInputChange('amex', v)} 
+              onFocus={() => setActivePaymentField('amex')}
               icon={<CreditCard size={20} />} 
               isActive={activeMethods.amex}
               onToggle={() => onToggleMethod('amex')}
@@ -689,6 +722,7 @@ function ServiceSection({
               label="AMEX Sans Contact" 
               value={payments.amexContactless} 
               onChange={(v) => handleInputChange('amexContactless', v)} 
+              onFocus={() => setActivePaymentField('amexContactless')}
               icon={<Nfc size={20} />} 
               isActive={activeMethods.amexContactless}
               onToggle={() => onToggleMethod('amexContactless')}
@@ -722,6 +756,7 @@ function ServiceSection({
               label="Carte TR" 
               value={payments.tr} 
               onChange={(v) => handleInputChange('tr', v)} 
+              onFocus={() => setActivePaymentField('tr')}
               icon={<Receipt size={20} />} 
               isActive={activeMethods.tr}
               onToggle={() => onToggleMethod('tr')}
@@ -730,6 +765,7 @@ function ServiceSection({
               label="TR Sans Contact" 
               value={payments.trContactless} 
               onChange={(v) => handleInputChange('trContactless', v)} 
+              onFocus={() => setActivePaymentField('trContactless')}
               icon={<Nfc size={20} />} 
               isActive={activeMethods.trContactless}
               onToggle={() => onToggleMethod('trContactless')}
@@ -747,6 +783,7 @@ function ServiceSection({
               label="Espèces" 
               value={payments.cash} 
               onChange={(v) => handleInputChange('cash', v)} 
+              onFocus={() => setActivePaymentField('cash')}
               icon={<Banknote size={20} />} 
               isActive={activeMethods.cash}
               onToggle={() => onToggleMethod('cash')}
@@ -755,6 +792,7 @@ function ServiceSection({
               label="Virement Bancaire" 
               value={payments.transfer} 
               onChange={(v) => handleInputChange('transfer', v)} 
+              onFocus={() => setActivePaymentField('transfer')}
               icon={<Landmark size={20} />} 
               isActive={activeMethods.transfer}
               onToggle={() => onToggleMethod('transfer')}
@@ -823,6 +861,7 @@ function PaymentInput({
   label, 
   value, 
   onChange, 
+  onFocus,
   icon, 
   isActive, 
   onToggle 
@@ -830,6 +869,7 @@ function PaymentInput({
   label: string, 
   value: number, 
   onChange: (v: string) => void, 
+  onFocus?: () => void,
   icon: React.ReactNode,
   isActive: boolean,
   onToggle: () => void
@@ -961,6 +1001,7 @@ function PaymentInput({
           min="0"
           disabled={!isActive}
           value={localValue}
+          onFocus={onFocus}
           onChange={(e) => handleChange(e.target.value)}
           placeholder={isListening ? "Écoute..." : "0.00"}
           className={`w-full border-none bg-transparent h-12 text-lg font-bold focus:ring-0 px-2 disabled:text-slate-400 ${error ? 'text-red-700 placeholder:text-red-300' : 'text-slate-900 placeholder:text-slate-300'}`}

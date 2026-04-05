@@ -99,6 +99,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
         service: editingRevenue.service,
         payments: editingRevenue.payments,
         notes: editingRevenue.notes || '',
+        attachments: editingRevenue.attachments || [],
         total: total,
         updatedAt: new Date()
       });
@@ -119,6 +120,14 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
         ...editingRevenue.payments,
         [field]: isNaN(numValue) ? 0 : numValue
       }
+    });
+  };
+
+  const removeAttachment = (url: string) => {
+    if (!editingRevenue) return;
+    setEditingRevenue({
+      ...editingRevenue,
+      attachments: editingRevenue.attachments?.filter(a => a.url !== url) || []
     });
   };
 
@@ -415,7 +424,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 </div>
               </div>
 
-              <div className="mb-8">
+              <div className="mb-6">
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Notes</label>
                 <textarea
                   value={editingRevenue.notes || ''}
@@ -424,6 +433,53 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                   className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-none h-24"
                 />
               </div>
+
+              {editingRevenue.attachments && editingRevenue.attachments.length > 0 && (
+                <div className="mb-8">
+                  <label className="block text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    <Paperclip size={16} className="text-slate-400" />
+                    Pièces jointes existantes
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {editingRevenue.attachments.map((att) => (
+                      <div key={att.url} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl group hover:border-blue-200 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-blue-600 shrink-0">
+                            <Paperclip size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-700 truncate" title={att.name}>
+                              {att.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                              {(att.size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <a 
+                            href={att.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Voir le fichier"
+                          >
+                            <Edit2 size={14} />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(att.url)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Supprimer la pièce jointe"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between pt-6 border-t border-slate-100">
                 <div>

@@ -23,9 +23,10 @@ import {
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays, eachMonthOfInterval, differenceInMonths, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight, X } from 'lucide-react';
+import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight, X, FileText, Loader2, CheckCircle2, AlertCircle, Layout, Palette, ChevronDown, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
+import { Logo } from '../components/Logo';
 
 type Period = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
@@ -103,23 +104,33 @@ const CustomLineTooltip = ({ active, payload, label }: any) => {
 
 const CustomBarTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
+    const total = payload.reduce((sum: number, entry: any) => sum + (entry.value || 0), 0);
     return (
-      <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-100 min-w-[200px]">
-        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{label}</p>
-        {payload.map((entry: any, index: number) => {
-          if (!entry.value) return null;
-          return (
-            <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-sm mt-2">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span className="text-slate-600 font-medium">{entry.name}</span>
+      <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-100 min-w-[220px]">
+        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2 flex justify-between items-center">
+          <span>{label}</span>
+          <span className="text-blue-600 text-xs font-black px-2 py-0.5 bg-blue-50 rounded-full">{total.toFixed(2)} €</span>
+        </p>
+        <div className="space-y-2">
+          {payload.map((entry: any, index: number) => {
+            if (!entry.value) return null;
+            const percentage = ((entry.value / total) * 100).toFixed(1);
+            return (
+              <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                  <span className="text-slate-600 font-medium">{entry.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-[10px]">{percentage}%</span>
+                  <span className="font-bold text-slate-900">
+                    {Number(entry.value).toFixed(2)} €
+                  </span>
+                </div>
               </div>
-              <span className="font-bold text-slate-900">
-                {Number(entry.value).toFixed(2)} €
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -139,8 +150,13 @@ export function Reports() {
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [compRevenues, setCompRevenues] = useState<Revenue[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [activePieIndex, setActivePieIndex] = useState<number>(0);
+  const [showDetailedTable, setShowDetailedTable] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     const saved = localStorage.getItem('reportsVisibleColumns');
     if (saved) {
@@ -175,7 +191,10 @@ export function Reports() {
     kpis: true,
     mainChart: true,
     paymentChart: true,
-    dailyTable: true
+    dailyTable: true,
+    reportName: `Rapport de Recettes - ${format(new Date(), 'dd/MM/yyyy')}`,
+    orientation: 'portrait' as 'portrait' | 'landscape',
+    theme: 'corporate' as 'corporate' | 'minimal' | 'bold'
   });
   const [comparisons, setComparisons] = useState({
     today: { current: 0, previous: 0, percent: 0 },
@@ -368,19 +387,28 @@ export function Reports() {
   };
 
   const generatePDF = async () => {
+    setIsGeneratingPDF(true);
     const comparisonEl = document.getElementById('report-comparison');
     const kpisEl = document.getElementById('report-kpis');
     const mainChartEl = document.getElementById('report-main-chart');
     const paymentChartEl = document.getElementById('report-payment-chart');
     const dailyTableEl = document.getElementById('report-daily-table');
+    const headerEl = document.getElementById('report-header');
+    const footerEl = document.getElementById('report-footer');
 
     const originalDisplay = {
       comparison: comparisonEl?.style.display,
       kpis: kpisEl?.style.display,
       mainChart: mainChartEl?.style.display,
       paymentChart: paymentChartEl?.style.display,
-      dailyTable: dailyTableEl?.style.display
+      dailyTable: dailyTableEl?.style.display,
+      header: headerEl?.style.display,
+      footer: footerEl?.style.display
     };
+
+    // Show header and footer
+    if (headerEl) headerEl.style.display = 'block';
+    if (footerEl) footerEl.style.display = 'flex';
 
     if (!exportOptions.comparison && comparisonEl) comparisonEl.style.display = 'none';
     if (!exportOptions.kpis && kpisEl) kpisEl.style.display = 'none';
@@ -390,33 +418,83 @@ export function Reports() {
 
     const reportElement = document.getElementById('pdf-export-content');
     if (!reportElement) {
-      if (comparisonEl) comparisonEl.style.display = originalDisplay.comparison || '';
-      if (kpisEl) kpisEl.style.display = originalDisplay.kpis || '';
-      if (mainChartEl) mainChartEl.style.display = originalDisplay.mainChart || '';
-      if (paymentChartEl) paymentChartEl.style.display = originalDisplay.paymentChart || '';
-      if (dailyTableEl) dailyTableEl.style.display = originalDisplay.dailyTable || '';
+      // ... reset display ...
+      setIsGeneratingPDF(false);
       return;
     }
 
+    // Adjust width based on orientation for better capture
+    const originalWidth = reportElement.style.width;
+    const originalPadding = reportElement.style.padding;
+    
+    if (exportOptions.orientation === 'landscape') {
+      reportElement.style.width = '1120px'; // A4 Landscape ratio-ish
+    } else {
+      reportElement.style.width = '794px'; // A4 Portrait ratio-ish
+    }
+    reportElement.style.padding = '40px';
+
     try {
-      const canvas = await html2canvas(reportElement, { scale: 2, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const imgData = await toPng(reportElement, { 
+        backgroundColor: exportOptions.theme === 'minimal' ? '#ffffff' : '#f8fafc',
+        pixelRatio: 2,
+        cacheBust: true,
+      });
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`rapport-recettes-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      const orientation = exportOptions.orientation === 'portrait' ? 'p' : 'l';
+      const pdf = new jsPDF(orientation, 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeightLimit = pdf.internal.pageSize.getHeight();
+      
+      // Create a temporary image to get dimensions
+      const img = new Image();
+      img.src = imgData;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+      
+      const pdfHeight = (img.height * pdfWidth) / img.width;
+      
+      // Handle multi-page if needed
+      if (pdfHeight > pdfHeightLimit) {
+        let heightLeft = pdfHeight;
+        let position = 0;
+        
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pdfHeightLimit;
+        
+        while (heightLeft >= 0) {
+          position = heightLeft - pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pdfHeightLimit;
+        }
+      } else {
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      }
+      
+      const fileName = exportOptions.reportName.replace(/[/\\?%*:|"<>]/g, '-') || `rapport-recettes-${format(new Date(), 'yyyy-MM-dd')}`;
+      pdf.save(`${fileName}.pdf`);
+      
+      setExportSuccess(true);
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {
+      // Restore original styles
+      if (reportElement) {
+        reportElement.style.width = originalWidth;
+        reportElement.style.padding = originalPadding;
+      }
       if (comparisonEl) comparisonEl.style.display = originalDisplay.comparison || '';
       if (kpisEl) kpisEl.style.display = originalDisplay.kpis || '';
       if (mainChartEl) mainChartEl.style.display = originalDisplay.mainChart || '';
       if (paymentChartEl) paymentChartEl.style.display = originalDisplay.paymentChart || '';
       if (dailyTableEl) dailyTableEl.style.display = originalDisplay.dailyTable || '';
+      if (headerEl) headerEl.style.display = originalDisplay.header || 'none';
+      if (footerEl) footerEl.style.display = originalDisplay.footer || 'none';
       
-      setShowExportModal(false);
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -425,8 +503,11 @@ export function Reports() {
     if (!chartElement) return;
 
     try {
-      const canvas = await html2canvas(chartElement, { scale: 2, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = await toPng(chartElement, { 
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        cacheBust: true,
+      });
       const link = document.createElement('a');
       link.href = imgData;
       link.download = `repartition-paiements-${format(new Date(), 'yyyy-MM-dd')}.png`;
@@ -448,46 +529,117 @@ export function Reports() {
     return est?.name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const exportCSV = () => {
-    const headers = ['Période', 'Date', 'Établissement', 'Service', 'Total', 'CB', 'Espèces', 'TR', 'AMEX', 'Virement'];
-    
-    const generateRows = (data: Revenue[], periodLabel: string) => {
-      return data.map(rev => {
-        const est = establishments.find(e => e.id === rev.establishmentId);
-        const estName = est ? est.name : 'Inconnu';
-        const cb = rev.payments.cb + rev.payments.cbContactless;
-        const amex = rev.payments.amex + rev.payments.amexContactless;
-        const tr = rev.payments.tr + rev.payments.trContactless;
-        
-        return [
-          periodLabel,
-          format(parseISO(rev.date), 'dd/MM/yyyy'),
-          `"${estName}"`,
-          rev.service,
-          rev.total,
-          cb,
-          rev.payments.cash,
-          tr,
-          amex,
-          rev.payments.transfer
-        ].join(',');
-      });
+  const exportJSON = () => {
+    const data = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        exportedBy: userProfile?.email || 'Utilisateur',
+        filters: {
+          establishment: selectedEst,
+          service: selectedService,
+          startDate,
+          endDate,
+          period
+        }
+      },
+      revenues: filteredRevenues,
+      establishments: establishments.filter(e => selectedEst === 'all' || e.id === selectedEst)
     };
 
-    let rows = generateRows(filteredRevenues, 'Actuelle');
-    
-    if (compareMode !== 'none') {
-      rows = rows.concat(generateRows(filteredCompRevenues, 'Comparaison'));
-    }
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `export-recettes-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.download = `backup-revenus-${format(new Date(), 'yyyy-MM-dd')}.json`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportCSV = () => {
+    setIsExportingData(true);
+    setTimeout(() => {
+      const headers = [
+        'Période',
+        'Date',
+        'Établissement',
+        'Service',
+        'Total (€)',
+        'CB (€)',
+        'CB Sans Contact (€)',
+        'AMEX (€)',
+        'AMEX Sans Contact (€)',
+        'TR (€)',
+        'TR Sans Contact (€)',
+        'Espèces (€)',
+        'Virement (€)',
+        'Notes'
+      ];
+
+      const escape = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const s = String(val);
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+      
+      const generateRows = (data: Revenue[], periodLabel: string) => {
+        return data.map(rev => {
+          const est = establishments.find(e => e.id === rev.establishmentId);
+          const estName = est ? est.name : 'Inconnu';
+          
+          return [
+            periodLabel,
+            rev.date,
+            estName,
+            rev.service === 'midi' ? 'Midi' : rev.service === 'soir' ? 'Soir' : '-',
+            rev.total.toFixed(2),
+            rev.payments.cb.toFixed(2),
+            rev.payments.cbContactless.toFixed(2),
+            rev.payments.amex.toFixed(2),
+            rev.payments.amexContactless.toFixed(2),
+            rev.payments.tr.toFixed(2),
+            rev.payments.trContactless.toFixed(2),
+            rev.payments.cash.toFixed(2),
+            rev.payments.transfer.toFixed(2),
+            rev.notes || ''
+          ].map(escape).join(',');
+        });
+      };
+
+      let rows = generateRows(filteredRevenues, 'Actuelle');
+      
+      if (compareMode !== 'none') {
+        rows = rows.concat(generateRows(filteredCompRevenues, 'Comparaison'));
+      }
+
+      // Add Metadata Header
+      const metadataHeader = [
+        `"Rapport de Recettes"`,
+        `"Généré le: ${format(new Date(), 'dd/MM/yyyy HH:mm')}"`,
+        `"Utilisateur: ${userProfile?.email || 'Inconnu'}"`,
+        `"Période: ${startDate} au ${endDate}"`,
+        `""` // Empty line
+      ].join('\n');
+
+      // Add BOM for Excel UTF-8 compatibility
+      const csvContent = '\uFEFF' + metadataHeader + '\n' + [headers.join(','), ...rows].join('\n');
+      const filename = selectedEst === 'all' 
+        ? `export-revenus-tous-etablissements-${format(new Date(), 'yyyy-MM-dd')}.csv`
+        : `export-revenus-${establishments.find(e => e.id === selectedEst)?.name.replace(/\s+/g, '-').toLowerCase() || 'etablissement'}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      setIsExportingData(false);
+      setExportSuccess(true);
+      setShowSaveModal(false);
+    }, 800);
   };
 
   // Prepare data for charts
@@ -721,39 +873,99 @@ Généré par NordicRevenueS`;
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Rapports & Analyses</h1>
           <p className="text-slate-500 text-sm mt-1">Analysez vos performances financières et exportez vos données.</p>
           
-          {/* Global Search Bar */}
-          <div className="mt-4 relative max-w-md">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Rechercher par nom d'établissement..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X size={14} />
-              </button>
-            )}
+          {/* Smart Establishment Selector */}
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Store size={12} /> Sélectionner un établissement
+              </p>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setSelectedEst('all')}
+                  className={`text-[10px] font-black px-3 py-1.5 rounded-full transition-all ${selectedEst === 'all' ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                  TOUS LES ÉTABLISSEMENTS
+                </button>
+                <div className="h-4 w-px bg-slate-200"></div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{establishments.length} Établissements</span>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {establishments.slice(0, 8).map(est => (
+                <button
+                  key={est.id}
+                  onClick={() => setSelectedEst(est.id)}
+                  className={`group relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all active:scale-95 overflow-hidden ${selectedEst === est.id ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400 hover:shadow-md'}`}
+                >
+                  <div className={`w-2.5 h-2.5 rounded-full transition-all ${selectedEst === est.id ? 'bg-white scale-110' : 'bg-blue-500 group-hover:scale-125'}`}></div>
+                  <span className="text-sm font-black tracking-tight">{est.name}</span>
+                  {selectedEst === est.id && (
+                    <div className="absolute -right-1 -bottom-1 opacity-10">
+                      <Store size={48} />
+                    </div>
+                  )}
+                </button>
+              ))}
+              
+              <div className="relative group min-w-[200px]">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Rechercher..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                
+                {/* Search Results Dropdown */}
+                {searchQuery && filteredEstablishments.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar p-2 animate-in slide-in-from-top-2 duration-200">
+                    {filteredEstablishments.map(est => (
+                      <button
+                        key={est.id}
+                        onClick={() => {
+                          setSelectedEst(est.id);
+                          setSearchQuery('');
+                        }}
+                        className="w-full flex items-center justify-between p-3 hover:bg-blue-50 rounded-xl transition-all text-left group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600 rounded-lg flex items-center justify-center transition-all">
+                            <Store size={16} />
+                          </div>
+                          <span className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{est.name}</span>
+                        </div>
+                        <ArrowUpRight size={14} className="text-slate-300 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
           <button 
-            onClick={exportCSV}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+            onClick={() => setShowSaveModal(true)}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
           >
-            <FileSpreadsheet size={16} /> Exporter CSV
+            <Save size={16} className="text-blue-600" /> Sauvegarder
           </button>
           <button 
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 hover:shadow-blue-200 active:scale-95"
           >
-            <Download size={16} /> Exporter PDF
+            <FileText size={18} /> Exporter PDF
           </button>
           <button 
             onClick={sendByEmail}
@@ -772,22 +984,6 @@ Généré par NordicRevenueS`;
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-            <Store size={14} /> Établissement
-          </label>
-          <select
-            value={selectedEst}
-            onChange={(e) => setSelectedEst(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="all">Tous les établissements</option>
-            {filteredEstablishments.map(est => (
-              <option key={est.id} value={est.id}>{est.name}</option>
-            ))}
-          </select>
-        </div>
-
         <div className="flex-1">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
             <Filter size={14} /> Service
@@ -874,6 +1070,26 @@ Généré par NordicRevenueS`;
 
         <div className="flex-1">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+            <FileSpreadsheet size={14} /> Mode Table
+          </label>
+          <div className="flex bg-slate-50 border border-slate-200 rounded-xl p-1">
+            <button
+              onClick={() => setShowDetailedTable(false)}
+              className={`flex-1 text-xs font-bold py-1.5 px-2 rounded-lg transition-all ${!showDetailedTable ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Résumé
+            </button>
+            <button
+              onClick={() => setShowDetailedTable(true)}
+              className={`flex-1 text-xs font-bold py-1.5 px-2 rounded-lg transition-all ${showDetailedTable ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Détail
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
             <TrendingUp size={14} /> Comparer à
           </label>
           <select
@@ -891,20 +1107,75 @@ Généré par NordicRevenueS`;
       {loading ? (
         <div className="h-64 flex items-center justify-center text-slate-400">Chargement des données...</div>
       ) : (
-        <div id="pdf-export-content" className="space-y-8">
+        <div id="pdf-export-content" className={`space-y-8 ${exportOptions.theme === 'minimal' ? 'font-sans' : ''}`}>
+          {/* PDF Header (Hidden in UI) */}
+          <div id="report-header" style={{ display: 'none' }} className={`mb-8 border-b-2 pb-6 ${
+            exportOptions.theme === 'bold' ? 'border-blue-600' : 
+            exportOptions.theme === 'minimal' ? 'border-slate-900' : 
+            'border-slate-200'
+          }`}>
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16">
+                  <Logo />
+                </div>
+                <div>
+                  <h1 className={`text-2xl font-black uppercase tracking-tighter ${
+                    exportOptions.theme === 'bold' ? 'text-blue-600' : 
+                    exportOptions.theme === 'minimal' ? 'text-slate-900' : 
+                    'text-slate-800'
+                  }`}>
+                    {exportOptions.reportName || 'Rapport de Recettes'}
+                  </h1>
+                  <p className="text-slate-500 font-medium">NordicRevenues II - Système de Gestion</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className={`text-sm font-bold ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>{format(new Date(), 'dd MMMM yyyy', { locale: fr })}</p>
+                <p className="text-xs text-slate-500">Généré à {format(new Date(), 'HH:mm')}</p>
+              </div>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-8">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Période du Rapport</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  Du {format(parseISO(startDate), 'dd/MM/yyyy')} au {format(parseISO(endDate), 'dd/MM/yyyy')}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Établissement</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  {selectedEst === 'all' ? 'Tous les établissements' : establishments.find(e => e.id === selectedEst)?.name}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Performances Globales */}
-          <div id="report-comparison" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-wider">Performances Globales (vs N-1)</h3>
+          <div id="report-comparison" className={`p-6 rounded-2xl border ${
+            exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+            exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+            'bg-white border-slate-200 shadow-sm'
+          }`}>
+            <h3 className={`text-sm font-bold mb-4 uppercase tracking-wider ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Performances Globales (vs N-1)</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Ce Jour */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div className={`p-4 rounded-xl border ${
+                  exportOptions.theme === 'minimal' ? 'bg-white border-slate-200' : 
+                  exportOptions.theme === 'bold' ? 'bg-blue-50/30 border-blue-100' : 
+                  'bg-slate-50 border-slate-100'
+                }`}>
                   <p className="text-xs font-semibold text-slate-500 mb-1">Ce jour vs N-1</p>
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-xl font-black text-slate-900">{comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                      <p className={`text-xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>{comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
                       <p className="text-xs text-slate-400 mt-1">N-1: {comparisons.today.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
                     </div>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${comparisons.today.percent > 0 ? 'bg-emerald-100 text-emerald-700' : comparisons.today.percent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
+                      comparisons.today.percent > 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-emerald-100 text-emerald-700') : 
+                      comparisons.today.percent < 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-red-100 text-red-700') : 
+                      'bg-slate-200 text-slate-700'
+                    }`}>
                       {comparisons.today.percent > 0 ? <TrendingUp size={14} /> : comparisons.today.percent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
                       {Math.abs(comparisons.today.percent).toFixed(1)}%
                     </div>
@@ -945,14 +1216,22 @@ Généré par NordicRevenueS`;
 
           {/* KPI Summary */}
           <div id="report-kpis" className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
               <p className="text-sm font-semibold text-slate-500 mb-1">Chiffre d'Affaires Total</p>
               <div className="flex items-end justify-between">
-                <p className="text-3xl font-black text-slate-900">
+                <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>
                   {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
                 {compareMode !== 'none' && (
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${periodPercent > 0 ? 'bg-emerald-100 text-emerald-700' : periodPercent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
+                    periodPercent > 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-emerald-100 text-emerald-700') : 
+                    periodPercent < 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-red-100 text-red-700') : 
+                    'bg-slate-200 text-slate-700'
+                  }`}>
                     {periodPercent > 0 ? <TrendingUp size={14} /> : periodPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
                     {Math.abs(periodPercent).toFixed(1)}%
                   </div>
@@ -962,14 +1241,22 @@ Généré par NordicRevenueS`;
                 {compareMode !== 'none' ? `vs ${compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : 'Sur la période sélectionnée'}
               </p>
             </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
               <p className="text-sm font-semibold text-slate-500 mb-1">Moyenne par Jour</p>
               <div className="flex items-end justify-between">
-                <p className="text-3xl font-black text-slate-900">
+                <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>
                   {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
                 {compareMode !== 'none' && (
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${avgPercent > 0 ? 'bg-emerald-100 text-emerald-700' : avgPercent < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-700'}`}>
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
+                    avgPercent > 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-emerald-100 text-emerald-700') : 
+                    avgPercent < 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-red-100 text-red-700') : 
+                    'bg-slate-200 text-slate-700'
+                  }`}>
                     {avgPercent > 0 ? <TrendingUp size={14} /> : avgPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
                     {Math.abs(avgPercent).toFixed(1)}%
                   </div>
@@ -979,9 +1266,13 @@ Généré par NordicRevenueS`;
                 {compareMode !== 'none' ? `vs ${compAvgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : `Sur ${uniqueDays} jours d'activité`}
               </p>
             </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
               <p className="text-sm font-semibold text-slate-500 mb-1">Meilleure Journée</p>
-              <p className="text-3xl font-black text-emerald-600">
+              <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-emerald-600'}`}>
                 {chartData.length > 0 
                   ? Math.max(...chartData.map(r => r.total)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
                   : '0,00 €'}
@@ -995,8 +1286,12 @@ Généré par NordicRevenueS`;
           </div>
 
           {/* Main Chart */}
-          <div id="report-main-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-900 mb-6">Évolution du Chiffre d'Affaires</h3>
+          <div id="report-main-chart" className={`p-6 rounded-2xl border ${
+            exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+            exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+            'bg-white border-slate-200 shadow-sm'
+          }`}>
+            <h3 className={`text-lg font-bold mb-6 ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Évolution du Chiffre d'Affaires</h3>
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`reports-main-chart-${startDate}-${endDate}-${selectedEst}`}>
                 <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -1062,9 +1357,13 @@ Généré par NordicRevenueS`;
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Payment Breakdown Pie Chart */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div id="report-payment-chart" className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-slate-900">Part de chaque moyen de paiement</h3>
+                <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Part de chaque moyen de paiement</h3>
                 <div className="relative">
                   <button
                     onClick={() => setShowChartPaymentSelector(!showChartPaymentSelector)}
@@ -1117,17 +1416,19 @@ Généré par NordicRevenueS`;
                 <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`reports-payment-pie-${startDate}-${endDate}-${selectedEst}`}>
                   <PieChart>
                     <Pie
-                      activeIndex={activePieIndex}
-                      activeShape={renderActiveShape}
-                      data={paymentTotals}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={5}
-                      dataKey="value"
-                      onMouseEnter={(_, index) => setActivePieIndex(index)}
-                      onClick={(_, index) => setActivePieIndex(index)}
+                      {...({
+                        activeIndex: activePieIndex,
+                        activeShape: renderActiveShape,
+                        data: paymentTotals,
+                        cx: "50%",
+                        cy: "50%",
+                        innerRadius: 60,
+                        outerRadius: 90,
+                        paddingAngle: 5,
+                        dataKey: "value",
+                        onMouseEnter: (_: any, index: number) => setActivePieIndex(index),
+                        onClick: (_: any, index: number) => setActivePieIndex(index),
+                      } as any)}
                     >
                       {paymentTotals.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} className="cursor-pointer outline-none" />
@@ -1144,14 +1445,21 @@ Généré par NordicRevenueS`;
             </div>
 
             {/* Payment Breakdown Chart */}
-            <div id="report-payment-chart" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div id="report-payment-evolution" className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-slate-900">Évolution par Moyen de Paiement</h3>
+                <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Évolution par Moyen de Paiement</h3>
                 <button
                   onClick={exportChartAsImage}
-                  className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                  className={`flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                    exportOptions.theme === 'minimal' ? 'text-black bg-slate-100 hover:bg-slate-200' : 
+                    'text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100'
+                  }`}
                 >
-                  <Download size={14} /> Exporter Image
+                  <Download size={14} /> Image
                 </button>
               </div>
               <div id="payment-chart-container" className="h-80 w-full bg-white p-2">
@@ -1171,16 +1479,16 @@ Généré par NordicRevenueS`;
                       tick={{ fill: '#64748b', fontSize: 12 }}
                       tickFormatter={(value) => `${value}€`}
                     />
-                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: '#f1f5f9' }} />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: '#f1f5f9', opacity: 0.4 }} />
                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                    {visibleChartPayments.cb && <Bar dataKey="cb" name="CB" fill="#3b82f6" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.cbContactless && <Bar dataKey="cbContactless" name="CB SC" fill="#60a5fa" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.amex && <Bar dataKey="amex" name="AMEX" fill="#f59e0b" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.amexContactless && <Bar dataKey="amexContactless" name="AMEX SC" fill="#fbbf24" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.tr && <Bar dataKey="tr" name="TR" fill="#10b981" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.trContactless && <Bar dataKey="trContactless" name="TR SC" fill="#34d399" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.cash && <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" radius={[4, 4, 0, 0]} />}
-                    {visibleChartPayments.transfer && <Bar dataKey="transfer" name="Virement" fill="#64748b" radius={[4, 4, 0, 0]} />}
+                    {visibleChartPayments.cb && <Bar dataKey="cb" name="CB" fill="#3b82f6" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.cbContactless && <Bar dataKey="cbContactless" name="CB SC" fill="#60a5fa" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.amex && <Bar dataKey="amex" name="AMEX" fill="#f59e0b" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.amexContactless && <Bar dataKey="amexContactless" name="AMEX SC" fill="#fbbf24" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.tr && <Bar dataKey="tr" name="TR" fill="#10b981" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.trContactless && <Bar dataKey="trContactless" name="TR SC" fill="#34d399" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.cash && <Bar dataKey="cash" name="Espèces" fill="#8b5cf6" stackId="a" radius={[0, 0, 0, 0]} />}
+                    {visibleChartPayments.transfer && <Bar dataKey="transfer" name="Virement" fill="#64748b" stackId="a" radius={[4, 4, 0, 0]} />}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1188,63 +1496,32 @@ Généré par NordicRevenueS`;
           </div>
 
           {/* Daily Breakdown Table */}
-          <div id="report-daily-table" className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div id="report-daily-table" className={`p-6 rounded-2xl border overflow-x-auto ${
+            exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+            exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+            'bg-white border-slate-200 shadow-sm'
+          }`}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>
                 Détail {period === 'monthly' ? 'Mensuel' : 'Journalier'} des Paiements
               </h3>
-              <div className="relative">
-                <button
-                  onClick={() => setShowColumnSelector(!showColumnSelector)}
-                  className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
-                >
-                  <Columns size={14} /> Colonnes
-                </button>
-                {showColumnSelector && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowColumnSelector(false)} />
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 z-20 p-2">
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" checked={visibleColumns.cb} onChange={(e) => setVisibleColumns(p => ({...p, cb: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-700">CB</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
-                        <input type="checkbox" checked={visibleColumns.cbContactless} onChange={(e) => setVisibleColumns(p => ({...p, cbContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-600">CB Sans Contact</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" checked={visibleColumns.amex} onChange={(e) => setVisibleColumns(p => ({...p, amex: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-700">AMEX</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
-                        <input type="checkbox" checked={visibleColumns.amexContactless} onChange={(e) => setVisibleColumns(p => ({...p, amexContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-600">AMEX Sans Contact</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" checked={visibleColumns.tr} onChange={(e) => setVisibleColumns(p => ({...p, tr: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-700">TR</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer pl-6">
-                        <input type="checkbox" checked={visibleColumns.trContactless} onChange={(e) => setVisibleColumns(p => ({...p, trContactless: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-600">TR Sans Contact</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" checked={visibleColumns.cash} onChange={(e) => setVisibleColumns(p => ({...p, cash: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-700">Espèces</span>
-                      </label>
-                      <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" checked={visibleColumns.transfer} onChange={(e) => setVisibleColumns(p => ({...p, transfer: e.target.checked}))} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-medium text-slate-700">Virement</span>
-                      </label>
-                    </div>
-                  </>
-                )}
-              </div>
             </div>
-            <div className="overflow-auto max-h-[500px] border border-slate-200 rounded-xl">
+            <div className={`overflow-auto max-h-[500px] border rounded-xl ${
+              exportOptions.theme === 'minimal' ? 'border-slate-900' : 
+              exportOptions.theme === 'bold' ? 'border-blue-100' : 
+              'border-slate-200'
+            }`}>
               <table className="w-full text-left border-collapse min-w-[600px]">
-                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
-                  <tr className="border-b border-slate-200 text-sm text-slate-500">
+                <thead className={`sticky top-0 z-10 shadow-sm ${
+                  exportOptions.theme === 'minimal' ? 'bg-slate-100' : 
+                  exportOptions.theme === 'bold' ? 'bg-blue-50' : 
+                  'bg-slate-50'
+                }`}>
+                  <tr className={`border-b text-sm ${
+                    exportOptions.theme === 'minimal' ? 'border-slate-900 text-black' : 
+                    exportOptions.theme === 'bold' ? 'border-blue-200 text-blue-900' : 
+                    'border-slate-200 text-slate-500'
+                  }`}>
                     <th className="py-3 px-4 font-semibold text-left">Période</th>
                     {visibleColumns.cb && <th className="py-3 px-4 font-semibold text-right">CB</th>}
                     {visibleColumns.cbContactless && <th className="py-3 px-4 font-semibold text-right">CB SC</th>}
@@ -1258,20 +1535,45 @@ Généré par NordicRevenueS`;
                   </tr>
                 </thead>
                 <tbody className="text-sm">
-                  {chartData.map((day) => (
-                    <tr key={day.date} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-4 font-medium text-slate-900">{day.date}</td>
-                      {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{day.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-600">{day.amexContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600">{day.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-600">{day.trContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600">{day.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600">{day.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                      <td className="py-3 px-4 text-right font-bold text-slate-900">{day.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
-                    </tr>
-                  ))}
+                  {showDetailedTable ? (
+                    filteredRevenues.map((rev) => {
+                      const est = establishments.find(e => e.id === rev.establishmentId);
+                      return (
+                        <tr key={rev.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-slate-900">{format(parseISO(rev.date), 'dd/MM/yyyy')}</div>
+                            <div className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">
+                              {est?.name || 'Inconnu'} • {rev.service || '-'}
+                            </div>
+                          </td>
+                          {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.amexContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.trContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          <td className="py-3 px-4 text-right font-bold text-slate-900">{rev.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    chartData.map((day) => (
+                      <tr key={day.date} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4 font-medium text-slate-900">{day.date}</td>
+                        {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{day.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-600">{day.amexContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600">{day.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-600">{day.trContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600">{day.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600">{day.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                        <td className="py-3 px-4 text-right font-bold text-slate-900">{day.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
                 <tfoot className="text-sm font-bold bg-slate-100 sticky bottom-0 z-10 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
                   <tr>
@@ -1435,75 +1737,360 @@ Généré par NordicRevenueS`;
               </table>
             </div>
           </div>
+
+          {/* PDF Footer (Hidden in UI) */}
+          <div id="report-footer" style={{ display: 'none' }} className={`mt-12 pt-6 border-t flex justify-between items-center text-[10px] font-medium ${
+            exportOptions.theme === 'minimal' ? 'border-slate-900 text-black' : 
+            exportOptions.theme === 'bold' ? 'border-blue-200 text-blue-600' : 
+            'border-slate-200 text-slate-400'
+          }`}>
+            <p>© {new Date().getFullYear()} NordicRevenues II - Document Confidentiel</p>
+            <p>Généré par {userProfile?.email || 'Utilisateur'}</p>
+            <p>Page 1 sur 1</p>
+          </div>
         </div>
       )}
       {/* Export PDF Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Personnaliser l'export PDF</h3>
-            <div className="space-y-3 mb-6">
-              {compareMode !== 'none' && (
-                <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
-                  <input 
-                    type="checkbox" 
-                    checked={exportOptions.comparison}
-                    onChange={(e) => setExportOptions({...exportOptions, comparison: e.target.checked})}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-slate-700">Comparaison des chiffres d'affaires</span>
-                </label>
-              )}
-              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
-                <input 
-                  type="checkbox" 
-                  checked={exportOptions.kpis}
-                  onChange={(e) => setExportOptions({...exportOptions, kpis: e.target.checked})}
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-slate-700">Résumé (KPIs)</span>
-              </label>
-              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
-                <input 
-                  type="checkbox" 
-                  checked={exportOptions.mainChart}
-                  onChange={(e) => setExportOptions({...exportOptions, mainChart: e.target.checked})}
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-slate-700">Graphique d'évolution du CA</span>
-              </label>
-              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
-                <input 
-                  type="checkbox" 
-                  checked={exportOptions.paymentChart}
-                  onChange={(e) => setExportOptions({...exportOptions, paymentChart: e.target.checked})}
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-slate-700">Répartition par moyen de paiement</span>
-              </label>
-              <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
-                <input 
-                  type="checkbox" 
-                  checked={exportOptions.dailyTable}
-                  onChange={(e) => setExportOptions({...exportOptions, dailyTable: e.target.checked})}
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-slate-700">Tableau détaillé journalier</span>
-              </label>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl p-0 max-w-lg w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Exporter en PDF</h3>
+                  <p className="text-xs text-slate-500 font-medium">Personnalisez votre rapport professionnel</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => !isGeneratingPDF && setShowExportModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-all"
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="flex justify-end gap-3">
+
+            <div className="p-8">
+              {exportSuccess ? (
+                <div className="py-8 flex flex-col items-center justify-center text-center animate-in zoom-in duration-500">
+                  <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-emerald-100/50">
+                    <CheckCircle2 size={48} />
+                  </div>
+                  <h4 className="text-2xl font-black text-slate-900 mb-2">Export Réussi !</h4>
+                  <p className="text-slate-500 mb-8 max-w-xs">Votre rapport professionnel est prêt et a été téléchargé sur votre appareil.</p>
+                  
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    <button 
+                      onClick={() => {
+                        setExportSuccess(false);
+                        setShowExportModal(false);
+                      }}
+                      className="px-6 py-4 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      Fermer
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setExportSuccess(false);
+                      }}
+                      className="px-6 py-4 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      Nouvel Export
+                    </button>
+                  </div>
+                  
+                  <div className="mt-8 pt-6 border-t border-slate-100 w-full">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Actions rapides</p>
+                    <div className="flex justify-center gap-6">
+                      <button onClick={sendByEmail} className="flex flex-col items-center gap-2 group">
+                        <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-xl transition-all">
+                          <Mail size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-blue-600">Email</span>
+                      </button>
+                      <button onClick={handleShare} className="flex flex-col items-center gap-2 group">
+                        <div className="p-3 bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-xl transition-all">
+                          <Share2 size={20} />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-blue-600">Partager</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : isGeneratingPDF ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <div className="relative mb-8">
+                    <div className="w-20 h-20 border-4 border-slate-100 rounded-full"></div>
+                    <div className="absolute inset-0 w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center text-blue-600">
+                      <FileText size={32} />
+                    </div>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 mb-2">Génération en cours...</h4>
+                  <p className="text-slate-500 max-w-[280px]">Nous préparons votre document haute résolution. Cela peut prendre quelques secondes.</p>
+                </div>
+              ) : (
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nom du rapport</p>
+                    <input 
+                      type="text"
+                      value={exportOptions.reportName}
+                      onChange={(e) => setExportOptions({...exportOptions, reportName: e.target.value})}
+                      placeholder="Ex: Rapport Mensuel Mars 2024"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Layout size={12} /> Orientation du document
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
+                        <button 
+                          onClick={() => setExportOptions({...exportOptions, orientation: 'portrait'})}
+                          className={`flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all ${exportOptions.orientation === 'portrait' ? 'bg-white text-blue-600 shadow-md ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}
+                        >
+                          <div className={`w-8 h-10 border-2 rounded-md flex items-center justify-center ${exportOptions.orientation === 'portrait' ? 'border-blue-200 bg-blue-50' : 'border-slate-300'}`}>
+                            <div className="w-4 h-1 bg-current opacity-20 rounded-full mb-1"></div>
+                            <div className="w-6 h-1 bg-current opacity-20 rounded-full"></div>
+                          </div>
+                          <span className="text-[10px] font-bold">Portrait</span>
+                        </button>
+                        <button 
+                          onClick={() => setExportOptions({...exportOptions, orientation: 'landscape'})}
+                          className={`flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all ${exportOptions.orientation === 'landscape' ? 'bg-white text-blue-600 shadow-md ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}
+                        >
+                          <div className={`w-10 h-8 border-2 rounded-md flex items-center justify-center ${exportOptions.orientation === 'landscape' ? 'border-blue-200 bg-blue-50' : 'border-slate-300'}`}>
+                            <div className="flex flex-col gap-1">
+                              <div className="w-6 h-1 bg-current opacity-20 rounded-full"></div>
+                              <div className="w-4 h-1 bg-current opacity-20 rounded-full"></div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold">Paysage</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Palette size={12} /> Style visuel
+                      </p>
+                      <div className="grid grid-cols-1 gap-2">
+                        <div className="relative">
+                          <select 
+                            value={exportOptions.theme}
+                            onChange={(e) => setExportOptions({...exportOptions, theme: e.target.value as any})}
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none appearance-none transition-all"
+                          >
+                            <option value="corporate">Corporate (Bleu Professionnel)</option>
+                            <option value="minimal">Minimaliste (Noir & Blanc)</option>
+                            <option value="bold">Audacieux (Contraste Élevé)</option>
+                          </select>
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                            <div className={`w-4 h-4 rounded-full ${exportOptions.theme === 'corporate' ? 'bg-blue-600' : exportOptions.theme === 'minimal' ? 'bg-slate-900' : 'bg-blue-500 shadow-sm shadow-blue-200'}`}></div>
+                          </div>
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ChevronDown size={16} />
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-slate-400 px-1">
+                          {exportOptions.theme === 'corporate' && "Idéal pour les présentations officielles et le partage interne."}
+                          {exportOptions.theme === 'minimal' && "Économe en encre, parfait pour l'impression directe."}
+                          {exportOptions.theme === 'bold' && "Design moderne avec des accents de couleurs vifs."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Sections à inclure</p>
+                    {compareMode !== 'none' && (
+                      <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.comparison ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.comparison ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                          {exportOptions.comparison && <CheckCircle2 size={14} className="text-white" />}
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={exportOptions.comparison}
+                          onChange={(e) => setExportOptions({...exportOptions, comparison: e.target.checked})}
+                          className="hidden"
+                        />
+                        <div className="flex-1">
+                          <span className="block text-sm font-bold text-slate-700">Comparaison N-1</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Performances globales vs année précédente</span>
+                        </div>
+                      </label>
+                    )}
+                    <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.kpis ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.kpis ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                        {exportOptions.kpis && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={exportOptions.kpis}
+                        onChange={(e) => setExportOptions({...exportOptions, kpis: e.target.checked})}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Résumé des KPIs</span>
+                        <span className="text-[10px] text-slate-400 font-medium">CA Total, Moyenne, Meilleure journée</span>
+                      </div>
+                    </label>
+                    <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.mainChart ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.mainChart ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                        {exportOptions.mainChart && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={exportOptions.mainChart}
+                        onChange={(e) => setExportOptions({...exportOptions, mainChart: e.target.checked})}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Graphique d'Évolution</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Visualisation temporelle du chiffre d'affaires</span>
+                      </div>
+                    </label>
+                    <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.paymentChart ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.paymentChart ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                        {exportOptions.paymentChart && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={exportOptions.paymentChart}
+                        onChange={(e) => setExportOptions({...exportOptions, paymentChart: e.target.checked})}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Moyens de Paiement</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Répartition détaillée par type de règlement</span>
+                      </div>
+                    </label>
+                    <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.dailyTable ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.dailyTable ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                        {exportOptions.dailyTable && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={exportOptions.dailyTable}
+                        onChange={(e) => setExportOptions({...exportOptions, dailyTable: e.target.checked})}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Tableau de Données</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Liste exhaustive des recettes journalières</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="pt-4 sticky bottom-0 bg-white border-t border-slate-100 mt-4">
+                    <div className="flex gap-4">
+                      <button 
+                        onClick={() => setShowExportModal(false)}
+                        className="flex-1 px-6 py-4 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all active:scale-95"
+                      >
+                        Annuler
+                      </button>
+                      <button 
+                        onClick={generatePDF}
+                        disabled={!Object.values(exportOptions).some(v => typeof v === 'boolean' && v)}
+                        className="flex-[2] px-6 py-4 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-2xl transition-all shadow-lg shadow-blue-200 active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <Download size={18} />
+                        Générer le Rapport
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Save Data Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl p-0 max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
+                  <Save size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Sauvegarder les Données</h3>
+                  <p className="text-xs text-slate-500 font-medium">Exportez vos données brutes pour archivage</p>
+                </div>
+              </div>
               <button 
-                onClick={() => setShowExportModal(false)}
-                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                onClick={() => !isExportingData && setShowSaveModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-all"
               >
-                Annuler
+                <X size={20} />
               </button>
-              <button 
-                onClick={generatePDF}
-                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors"
-              >
-                Générer PDF
-              </button>
+            </div>
+
+            <div className="p-8">
+              {isExportingData ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <div className="relative mb-8">
+                    <div className="w-20 h-20 border-4 border-slate-100 rounded-full"></div>
+                    <div className="absolute inset-0 w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center text-blue-600">
+                      <FileSpreadsheet size={32} />
+                    </div>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 mb-2">Préparation de l'export...</h4>
+                  <p className="text-slate-500 max-w-[280px]">Nous compilons toutes les données de revenus avec les méthodes de paiement.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                    <p className="text-xs text-blue-700 leading-relaxed">
+                      L'exportation inclut toutes les colonnes du tableau : date, établissement, service, total et le détail complet de chaque moyen de paiement.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <button 
+                      onClick={exportCSV}
+                      className="group flex items-center gap-4 p-4 border border-slate-200 rounded-2xl hover:border-blue-300 hover:bg-blue-50/30 transition-all text-left"
+                    >
+                      <div className="p-3 bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600 rounded-xl transition-all">
+                        <FileSpreadsheet size={24} />
+                      </div>
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Format CSV (Excel)</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Idéal pour l'analyse dans un tableur</span>
+                      </div>
+                    </button>
+
+                    <button 
+                      onClick={exportJSON}
+                      className="group flex items-center gap-4 p-4 border border-slate-200 rounded-2xl hover:border-blue-300 hover:bg-blue-50/30 transition-all text-left"
+                    >
+                      <div className="p-3 bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600 rounded-xl transition-all">
+                        <FileText size={24} />
+                      </div>
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Format JSON (Backup)</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Format technique pour sauvegarde complète</span>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <button 
+                      onClick={() => setShowSaveModal(false)}
+                      className="w-full px-6 py-4 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all active:scale-95"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

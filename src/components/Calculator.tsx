@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Delete, Palette } from 'lucide-react';
+import { X, Delete, Palette, Check } from 'lucide-react';
 
 interface CalculatorProps {
   onClose: () => void;
+  activePaymentType?: string | null;
+  onPaymentTypeSelect?: (type: string) => void;
+  onApply?: (value: number) => void;
+  initialValue?: string;
 }
 
 type Theme = 'light' | 'dark' | 'glass' | 'white' | 'black' | 'neonPink' | 'neonGreen' | 'neonBlue' | 'neonYellow' | 'neonOrange' | 'neonCyan' | 'neonPurple';
@@ -154,15 +158,31 @@ const themes: Record<Theme, any> = {
   }
 };
 
-export function Calculator({ onClose }: CalculatorProps) {
-  const [display, setDisplay] = useState('0');
+export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, onApply, initialValue }: CalculatorProps) {
+  const [display, setDisplay] = useState(initialValue || '0');
   const [previousValue, setPreviousValue] = useState<number | null>(null);
   const [operator, setOperator] = useState<string | null>(null);
   const [waitingForNewValue, setWaitingForNewValue] = useState(false);
-  const [position, setPosition] = useState({ x: window.innerWidth - 340, y: window.innerHeight - 500 });
+  const [position, setPosition] = useState({ x: window.innerWidth - 450, y: window.innerHeight - 550 });
   const [isDragging, setIsDragging] = useState(false);
   const [theme, setTheme] = useState<Theme>('light');
   const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+
+  const paymentMethods = [
+    { id: 'cb', label: 'Carte', icon: '💳' },
+    { id: 'cbContactless', label: 'Sans Contact', icon: '📶' },
+    { id: 'cash', label: 'Espèces', icon: '💵' },
+    { id: 'amex', label: 'AMEX', icon: '💎' },
+    { id: 'tr', label: 'Titres Resto', icon: '🎫' },
+    { id: 'transfer', label: 'Virement', icon: '🏦' },
+  ];
+
+  useEffect(() => {
+    if (initialValue !== undefined) {
+      setDisplay(initialValue);
+      setWaitingForNewValue(false);
+    }
+  }, [initialValue]);
 
   // Handle dragging
   useEffect(() => {
@@ -292,14 +312,34 @@ export function Calculator({ onClose }: CalculatorProps) {
 
   return (
     <div 
-      className={`fixed w-80 rounded-3xl overflow-hidden flex flex-col transition-colors duration-300 border ${t.container}`}
+      className={`fixed w-[420px] rounded-3xl overflow-hidden flex flex-row transition-colors duration-300 border ${t.container}`}
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
     >
-      {/* Header */}
-      <div 
-        className={`px-4 py-3 border-b flex justify-between items-center cursor-move select-none transition-colors duration-300 ${t.header}`}
-        onMouseDown={handleMouseDown}
-      >
+      {/* Payment Methods Sidebar */}
+      <div className="w-32 border-r border-slate-200/20 bg-black/5 flex flex-col p-2 gap-2">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-2">Paiements</p>
+        {paymentMethods.map(method => (
+          <button
+            key={method.id}
+            onClick={() => onPaymentTypeSelect?.(method.id)}
+            className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
+              activePaymentType === method.id 
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 scale-105 z-10' 
+                : 'bg-white/5 text-slate-400 hover:bg-white/10'
+            }`}
+          >
+            <span className="text-lg">{method.icon}</span>
+            <span className="text-[8px] font-bold uppercase mt-1 text-center leading-tight">{method.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div 
+          className={`px-4 py-3 border-b flex justify-between items-center cursor-move select-none transition-colors duration-300 ${t.header}`}
+          onMouseDown={handleMouseDown}
+        >
         <div className="flex items-center gap-2">
           <button 
             onClick={(e) => { e.stopPropagation(); cycleTheme(); }}
@@ -347,7 +387,17 @@ export function Calculator({ onClose }: CalculatorProps) {
         <button onClick={() => inputDigit('0')} className={`col-span-2 p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>0</button>
         <button onClick={inputDecimal} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnNum}`}>.</button>
         <button onClick={() => performOperation('=')} className={`p-4 text-xl font-medium rounded-2xl transition-all active:scale-95 ${t.btnEquals}`}>=</button>
+
+        {activePaymentType && (
+          <button 
+            onClick={() => onApply?.(parseFloat(display))}
+            className={`col-span-4 mt-2 p-4 text-lg font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${t.btnEquals}`}
+          >
+            <Check size={20} /> Appliquer au champ
+          </button>
+        )}
       </div>
     </div>
-  );
+  </div>
+);
 }

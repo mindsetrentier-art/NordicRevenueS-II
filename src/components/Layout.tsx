@@ -19,6 +19,7 @@ import { MusicPlayer } from './MusicPlayer';
 import { WeatherWidget } from './WeatherWidget';
 import { ProverbWidget } from './ProverbWidget';
 import { HistoricalBar } from './HistoricalBar';
+import { QuizSidebar } from './QuizSidebar';
 
 export function Layout() {
   const { userProfile, logout } = useAuth();
@@ -50,6 +51,7 @@ export function Layout() {
       <WeatherWidget />
       <ProverbWidget />
       <HistoricalBar />
+      <QuizSidebar />
       {/* Mobile Header */}
       <header className="lg:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">

@@ -12,13 +12,34 @@ interface AIInsightsProps {
 }
 
 export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsightsProps) {
-  const [insights, setInsights] = useState<string | null>(null);
+  const [insights, setInsights] = useState<string | null>(() => {
+    const cached = localStorage.getItem(`ai_insights_${periodLabel}`);
+    if (cached) {
+      try {
+        const { data, timestamp } = JSON.parse(cached);
+        // Cache for 24 hours for the same period
+        if (Date.now() - timestamp < 86400000) {
+          return data;
+        }
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const generateInsights = async () => {
     if (!ai) {
       setError("Clé API Gemini manquante. Veuillez configurer VITE_GEMINI_API_KEY.");
+      return;
+    }
+
+    // Check for quota cooldown
+    const lastQuotaError = localStorage.getItem('ai_insights_quota_error');
+    if (lastQuotaError && Date.now() - parseInt(lastQuotaError) < 900000) { // 15 min
+      setError("Quota d'analyse IA dépassé. Veuillez réessayer dans quelques minutes.");
       return;
     }
 
@@ -51,10 +72,18 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
         contents: prompt,
       });
 
-      setInsights(response.text || "Analyse non disponible.");
-    } catch (err) {
+      const text = response.text || "Analyse non disponible.";
+      setInsights(text);
+      localStorage.setItem(`ai_insights_${periodLabel}`, JSON.stringify({ data: text, timestamp: Date.now() }));
+      localStorage.removeItem('ai_insights_quota_error');
+    } catch (err: any) {
       console.error("Erreur IA:", err);
-      setError("Impossible de générer l'analyse IA pour le moment.");
+      if (err.message?.includes('429') || err.message?.includes('quota')) {
+        localStorage.setItem('ai_insights_quota_error', Date.now().toString());
+        setError("Quota d'analyse IA dépassé. Veuillez réessayer plus tard.");
+      } else {
+        setError("Impossible de générer l'analyse IA pour le moment.");
+      }
     } finally {
       setLoading(false);
     }

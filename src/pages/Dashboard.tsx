@@ -18,7 +18,8 @@ import {
   ChevronDown,
   HelpCircle,
   Shield,
-  X
+  X,
+  Calendar
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -28,6 +29,7 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
+  Legend,
   LineChart,
   Line
 } from 'recharts';
@@ -68,6 +70,59 @@ const TrendBadge = ({ value, isPercentagePoint = false }: { value: number | null
   );
 };
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-white p-4 border border-slate-200 shadow-2xl rounded-2xl min-w-[220px] animate-in fade-in zoom-in duration-200">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+          <Calendar size={14} className="text-blue-600" />
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            {format(new Date(label), 'EEEE d MMMM yyyy', { locale: fr })}
+          </p>
+        </div>
+        
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Chiffre d'Affaires Total</p>
+            <p className="text-xl font-black text-slate-900">
+              {data.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            </p>
+          </div>
+          
+          {(data.midi > 0 || data.soir > 0) && (
+            <div className="pt-2 border-t border-slate-50 space-y-2">
+              {data.midi > 0 && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    <span className="text-xs text-slate-500">Service Midi ({Math.round((data.midi / data.total) * 100)}%)</span>
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">
+                    {data.midi.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                  </span>
+                </div>
+              )}
+              {data.soir > 0 && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                    <span className="text-xs text-slate-500">Service Soir ({Math.round((data.soir / data.total) * 100)}%)</span>
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">
+                    {data.soir.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export function Dashboard() {
   const { userProfile } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
@@ -81,6 +136,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [hoveredData, setHoveredData] = useState<any>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -199,11 +255,18 @@ export function Dashboard() {
     const existing = acc.find(item => item.date === curr.date);
     if (existing) {
       existing.total += curr.total;
+      if (curr.service === 'midi') existing.midi += curr.total;
+      if (curr.service === 'soir') existing.soir += curr.total;
     } else {
-      acc.push({ date: curr.date, total: curr.total });
+      acc.push({ 
+        date: curr.date, 
+        total: curr.total,
+        midi: curr.service === 'midi' ? curr.total : 0,
+        soir: curr.service === 'soir' ? curr.total : 0
+      });
     }
     return acc;
-  }, [] as { date: string, total: number }[]);
+  }, [] as { date: string, total: number, midi: number, soir: number }[]);
 
   // Sort chart data
   chartData.sort((a, b) => a.date.localeCompare(b.date));
@@ -527,14 +590,100 @@ export function Dashboard() {
                   tickFormatter={(val) => `${val / 1000}k`}
                 />
                 <Tooltip 
-                  cursor={{ fill: '#f1f5f9' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value: number) => [`${value.toLocaleString('fr-FR')} €`, 'CA']}
-                  labelFormatter={(label) => format(new Date(label), 'dd MMMM yyyy', { locale: fr })}
+                  cursor={{ fill: '#f1f5f9', radius: 4 }}
+                  content={<CustomTooltip />}
                 />
-                <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Legend 
+                  verticalAlign="top" 
+                  align="right" 
+                  iconType="circle"
+                  content={({ payload }) => (
+                    <div className="flex justify-end gap-4 mb-4">
+                      {payload?.map((entry: any, index: number) => (
+                        <div key={`item-${index}`} className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{entry.value === 'midi' ? 'Midi' : 'Soir'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                />
+                <Bar 
+                  dataKey="midi" 
+                  name="midi"
+                  stackId="a"
+                  fill="#fbbf24" 
+                  radius={[0, 0, 0, 0]} 
+                  maxBarSize={40}
+                  onMouseEnter={(data) => setHoveredData(data)}
+                  onMouseLeave={() => setHoveredData(null)}
+                  className="cursor-pointer transition-all duration-300"
+                />
+                <Bar 
+                  dataKey="soir" 
+                  name="soir"
+                  stackId="a"
+                  fill="#6366f1" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={40}
+                  onMouseEnter={(data) => setHoveredData(data)}
+                  onMouseLeave={() => setHoveredData(null)}
+                  className="cursor-pointer transition-all duration-300"
+                />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Service Breakdown Detail (Visible on Hover) */}
+          <div className="mt-8 pt-6 border-t border-slate-50 min-h-[100px] flex items-center justify-center">
+            {hoveredData ? (
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between group hover:bg-amber-50 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center shadow-sm">
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Service Midi</p>
+                      <p className="text-lg font-black text-slate-900">
+                        {hoveredData.midi.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part du CA</p>
+                    <p className="text-sm font-bold text-amber-600">
+                      {hoveredData.total > 0 ? ((hoveredData.midi / hoveredData.total) * 100).toFixed(1) : 0}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl flex items-center justify-between group hover:bg-indigo-50 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Service Soir</p>
+                      <p className="text-lg font-black text-slate-900">
+                        {hoveredData.soir.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part du CA</p>
+                    <p className="text-sm font-bold text-indigo-600">
+                      {hoveredData.total > 0 ? ((hoveredData.soir / hoveredData.total) * 100).toFixed(1) : 0}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-slate-400 animate-pulse">
+                <HelpCircle size={24} className="opacity-20" />
+                <p className="text-xs font-bold uppercase tracking-widest opacity-40">Survolez une barre pour voir le détail par service</p>
+              </div>
+            )}
           </div>
         </div>
 

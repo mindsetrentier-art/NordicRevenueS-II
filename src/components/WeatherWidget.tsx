@@ -14,9 +14,27 @@ interface AirQualityData {
   };
 }
 
+interface WeatherData {
+  temp: number;
+  feelsLike: number;
+  humidity: number;
+  windSpeed: number;
+  code: number;
+  isDay: boolean;
+}
+
+interface ForecastDay {
+  date: string;
+  code: number;
+  maxTemp: number;
+  minTemp: number;
+}
+
 export function WeatherWidget() {
   const [time, setTime] = useState(new Date());
-  const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [forecast, setForecast] = useState<ForecastDay[]>([]);
+  const [locationName, setLocationName] = useState<string | null>(null);
   const [airQuality, setAirQuality] = useState<AirQualityData | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
@@ -142,15 +160,43 @@ export function WeatherWidget() {
 
     const fetchData = async () => {
       try {
-        // Fetch weather
+        // Fetch weather with more details
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current_weather=true`
+          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
         );
         const weatherData = await weatherRes.json();
+        
         setWeather({
-          temp: Math.round(weatherData.current_weather.temperature),
-          code: weatherData.current_weather.weathercode,
+          temp: Math.round(weatherData.current.temperature_2m),
+          feelsLike: Math.round(weatherData.current.apparent_temperature),
+          humidity: weatherData.current.relative_humidity_2m,
+          windSpeed: Math.round(weatherData.current.wind_speed_10m),
+          code: weatherData.current.weather_code,
+          isDay: weatherData.current.is_day === 1
         });
+
+        // Set forecast
+        const daily = weatherData.daily;
+        const forecastData: ForecastDay[] = daily.time.map((t: string, i: number) => ({
+          date: t,
+          code: daily.weather_code[i],
+          maxTemp: Math.round(daily.temperature_2m_max[i]),
+          minTemp: Math.round(daily.temperature_2m_min[i])
+        })).slice(1, 6); // Next 5 days
+        setForecast(forecastData);
+
+        // Fetch location name (Reverse Geocoding)
+        try {
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${location.lat}&lon=${location.lon}&format=json`,
+            { headers: { 'Accept-Language': 'fr' } }
+          );
+          const geoData = await geoRes.json();
+          const city = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.suburb;
+          setLocationName(city);
+        } catch (e) {
+          console.error('Error fetching location name:', e);
+        }
 
         // Fetch air quality & pollen
         const aqRes = await fetch(
@@ -189,12 +235,26 @@ export function WeatherWidget() {
     return () => clearInterval(timer);
   }, [location]);
 
-  const getWeatherIcon = (code: number) => {
-    if (code === 0) return <Sun size={14} className="text-yellow-500" />;
+  const getWeatherIcon = (code: number, isDay: boolean = true) => {
+    if (code === 0) return isDay ? <Sun size={14} className="text-yellow-500" /> : <Cloud size={14} className="text-slate-300" />;
     if (code <= 3) return <Cloud size={14} className="text-slate-400" />;
+    if (code <= 48) return <Cloud size={14} className="text-slate-300" />; // Fog
     if (code <= 67) return <CloudRain size={14} className="text-blue-400" />;
+    if (code <= 77) return <Cloud size={14} className="text-slate-200" />; // Snow
+    if (code <= 82) return <CloudRain size={14} className="text-blue-500" />;
     if (code <= 99) return <CloudLightning size={14} className="text-purple-400" />;
     return <Sun size={14} className="text-yellow-500" />;
+  };
+
+  const getWeatherLabel = (code: number) => {
+    if (code === 0) return 'Dégagé';
+    if (code <= 3) return 'Partiellement nuageux';
+    if (code <= 48) return 'Brouillard';
+    if (code <= 67) return 'Pluie';
+    if (code <= 77) return 'Neige';
+    if (code <= 82) return 'Averses';
+    if (code <= 99) return 'Orageux';
+    return 'Dégagé';
   };
 
   const getAqiColor = (aqi: number) => {
@@ -252,20 +312,75 @@ export function WeatherWidget() {
       >
         <div className="flex items-center gap-1.5">
           <Clock size={14} className="text-slate-400" />
-          <span className="tabular-nums">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="tabular-nums font-bold">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          {locationName && (
+            <span className="text-[10px] text-slate-400 ml-1 hidden md:inline">({locationName})</span>
+          )}
         </div>
         
         {weather && (
-          <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
-            <div className="flex items-center gap-1.5" title="Météo">
-              {getWeatherIcon(weather.code)}
-              <span className="capitalize hidden sm:inline">
-                {weather.code === 0 ? 'Dégagé' : weather.code <= 3 ? 'Nuageux' : 'Pluie'}
-              </span>
+          <div className="flex items-center gap-3 border-l border-slate-200 pl-4 relative group/weather cursor-help">
+            <div className="flex items-center gap-1.5" title={`${getWeatherLabel(weather.code)} (Ressenti ${weather.feelsLike}°C)`}>
+              {getWeatherIcon(weather.code, weather.isDay)}
+              <div className="flex flex-col leading-none">
+                <span className="tabular-nums font-bold">{weather.temp}°C</span>
+                <span className="text-[8px] text-slate-400 font-medium">Ressenti {weather.feelsLike}°</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5" title="Température">
-              <Thermometer size={14} className="text-orange-400" />
-              <span className="tabular-nums">{weather.temp}°C</span>
+            <div className="flex items-center gap-1.5" title="Humidité">
+              <CloudRain size={14} className="text-blue-300" />
+              <span className="tabular-nums">{weather.humidity}%</span>
+            </div>
+            <div className="flex items-center gap-1.5" title="Vent">
+              <Wind size={14} className="text-slate-300" />
+              <span className="tabular-nums">{weather.windSpeed} km/h</span>
+            </div>
+
+            {/* Weather Details Tooltip */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 opacity-0 invisible group-hover/weather:opacity-100 group-hover/weather:visible transition-all duration-300 z-50 pointer-events-none text-left">
+              <div className="mb-4 pb-3 border-b border-slate-100">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">{locationName || 'Votre position'}</h4>
+                    <p className="text-[10px] text-slate-500">{getWeatherLabel(weather.code)}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-black text-slate-900">{weather.temp}°C</div>
+                    <p className="text-[10px] text-slate-400">Ressenti {weather.feelsLike}°C</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="flex justify-between text-slate-600 bg-slate-50 p-1.5 rounded-lg">
+                    <span>Humidité</span>
+                    <span className="font-bold">{weather.humidity}%</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 bg-slate-50 p-1.5 rounded-lg">
+                    <span>Vent</span>
+                    <span className="font-bold">{weather.windSpeed} km/h</span>
+                  </div>
+                </div>
+              </div>
+
+              {forecast.length > 0 && (
+                <div className="space-y-2">
+                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Prévisions 5 jours</h5>
+                  {forecast.map((day) => (
+                    <div key={day.date} className="flex items-center justify-between py-1 border-b border-slate-50 last:border-0">
+                      <span className="text-[10px] font-medium text-slate-600 w-12">
+                        {new Date(day.date).toLocaleDateString('fr-FR', { weekday: 'short' })}
+                      </span>
+                      <div className="flex items-center gap-2 flex-1 justify-center">
+                        {getWeatherIcon(day.code)}
+                        <span className="text-[9px] text-slate-400 truncate max-w-[80px]">{getWeatherLabel(day.code)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 w-16 justify-end">
+                        <span className="text-[10px] font-bold text-slate-900">{day.maxTemp}°</span>
+                        <span className="text-[10px] text-slate-400">{day.minTemp}°</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -338,9 +453,18 @@ export function WeatherWidget() {
           onClick={() => setIsVisible(true)}
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
-          className="w-12 h-1.5 bg-slate-300 hover:bg-slate-400 rounded-b-full transition-all duration-300 cursor-move pointer-events-auto mt-0"
+          className="bg-white/80 backdrop-blur-sm border border-slate-200/50 px-3 py-1 rounded-b-xl shadow-lg flex items-center gap-2 text-[10px] font-bold text-slate-500 hover:bg-white transition-all duration-300 cursor-move pointer-events-auto mt-0 group"
           title="Afficher météo et heure"
-        />
+        >
+          <Clock size={10} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
+          <span className="tabular-nums">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          {weather && (
+            <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+              {getWeatherIcon(weather.code, weather.isDay)}
+              <span>{weather.temp}°</span>
+            </div>
+          )}
+        </button>
       )}
     </div>
   );

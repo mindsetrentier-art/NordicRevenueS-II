@@ -262,11 +262,13 @@ export function MusicPlayer() {
         }}
         className={`fixed bottom-6 z-40 flex items-center justify-center text-white shadow-lg transition-all duration-500 ease-in-out overflow-hidden ${getPlatformColor(activePlatform)} ${
           isMinimized 
-            ? 'right-0 w-2 h-16 rounded-l-md opacity-50 hover:opacity-100 hover:w-3' 
+            ? 'right-0 w-10 h-12 rounded-l-xl opacity-80 hover:opacity-100 hover:w-12' 
             : 'right-6 w-14 h-14 rounded-full opacity-100'
         }`}
       >
-        <Music size={24} className={`transition-all duration-500 min-w-[24px] ${isMinimized ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`} />
+        <div className={`flex items-center justify-center transition-all duration-500 ${isMinimized ? 'translate-x-1' : ''}`}>
+          {activePlatform === 'youtube' ? <Youtube size={isMinimized ? 18 : 24} /> : <Music size={isMinimized ? 18 : 24} />}
+        </div>
       </button>
 
       {isOpen && (
