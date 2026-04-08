@@ -23,10 +23,11 @@ import {
 } from 'recharts';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, subYears, startOfYear, endOfYear, eachDayOfInterval, differenceInDays, eachMonthOfInterval, differenceInMonths, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight, X, FileText, Loader2, CheckCircle2, AlertCircle, Layout, Palette, ChevronDown, Save } from 'lucide-react';
+import { Download, Mail, Share2, Calendar as CalendarIcon, Filter, Store, TrendingUp, TrendingDown, Minus, Search, FileSpreadsheet, Columns, ArrowUpRight, ArrowDownRight, X, FileText, Loader2, CheckCircle2, AlertCircle, Layout, Palette, ChevronDown, Save, Sparkles } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
 import { Logo } from '../components/Logo';
+import { GoogleGenAI } from '@google/genai';
 
 type Period = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
@@ -144,6 +145,7 @@ export function Reports() {
   const [selectedEst, setSelectedEst] = useState<string>('all');
   const [selectedService, setSelectedService] = useState<string>('all');
   const [period, setPeriod] = useState<Period>('daily');
+  const [showDetailedTable, setShowDetailedTable] = useState(false);
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [compareMode, setCompareMode] = useState<'none' | 'previous_period' | 'previous_year'>('none');
@@ -156,7 +158,7 @@ export function Reports() {
   const [exportSuccess, setExportSuccess] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [activePieIndex, setActivePieIndex] = useState<number>(0);
-  const [showDetailedTable, setShowDetailedTable] = useState(false);
+  const [isEstDropdownOpen, setIsEstDropdownOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     const saved = localStorage.getItem('reportsVisibleColumns');
     if (saved) {
@@ -192,10 +194,21 @@ export function Reports() {
     mainChart: true,
     paymentChart: true,
     dailyTable: true,
+    aiAnalysis: false,
     reportName: `Rapport de Recettes - ${format(new Date(), 'dd/MM/yyyy')}`,
     orientation: 'portrait' as 'portrait' | 'landscape',
     theme: 'corporate' as 'corporate' | 'minimal' | 'bold'
   });
+  const [aiAnalysisContent, setAiAnalysisContent] = useState<string | null>(null);
+  const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
+
+  // Reset AI analysis when filters change
+  useEffect(() => {
+    setAiAnalysisContent(null);
+    if (exportOptions.aiAnalysis) {
+      setExportOptions(prev => ({ ...prev, aiAnalysis: false }));
+    }
+  }, [startDate, endDate, selectedEst]);
   const [comparisons, setComparisons] = useState({
     today: { current: 0, previous: 0, percent: 0 },
     thisMonth: { current: 0, previous: 0, percent: 0 },
@@ -388,37 +401,8 @@ export function Reports() {
 
   const generatePDF = async () => {
     setIsGeneratingPDF(true);
-    const comparisonEl = document.getElementById('report-comparison');
-    const kpisEl = document.getElementById('report-kpis');
-    const mainChartEl = document.getElementById('report-main-chart');
-    const paymentChartEl = document.getElementById('report-payment-chart');
-    const dailyTableEl = document.getElementById('report-daily-table');
-    const headerEl = document.getElementById('report-header');
-    const footerEl = document.getElementById('report-footer');
-
-    const originalDisplay = {
-      comparison: comparisonEl?.style.display,
-      kpis: kpisEl?.style.display,
-      mainChart: mainChartEl?.style.display,
-      paymentChart: paymentChartEl?.style.display,
-      dailyTable: dailyTableEl?.style.display,
-      header: headerEl?.style.display,
-      footer: footerEl?.style.display
-    };
-
-    // Show header and footer
-    if (headerEl) headerEl.style.display = 'block';
-    if (footerEl) footerEl.style.display = 'flex';
-
-    if (!exportOptions.comparison && comparisonEl) comparisonEl.style.display = 'none';
-    if (!exportOptions.kpis && kpisEl) kpisEl.style.display = 'none';
-    if (!exportOptions.mainChart && mainChartEl) mainChartEl.style.display = 'none';
-    if (!exportOptions.paymentChart && paymentChartEl) paymentChartEl.style.display = 'none';
-    if (!exportOptions.dailyTable && dailyTableEl) dailyTableEl.style.display = 'none';
-
     const reportElement = document.getElementById('pdf-export-content');
     if (!reportElement) {
-      // ... reset display ...
       setIsGeneratingPDF(false);
       return;
     }
@@ -434,44 +418,85 @@ export function Reports() {
     }
     reportElement.style.padding = '40px';
 
+    const sectionsToCapture = [
+      { id: 'report-header', condition: true, display: 'block', forceNewPage: false },
+      { id: 'report-comparison', condition: exportOptions.comparison, display: 'block', forceNewPage: false },
+      { id: 'report-kpis', condition: exportOptions.kpis, display: 'grid', forceNewPage: false },
+      { id: 'report-ai-analysis', condition: exportOptions.aiAnalysis, display: 'block', forceNewPage: true },
+      { id: 'report-main-chart', condition: exportOptions.mainChart, display: 'block', forceNewPage: true },
+      { id: 'report-payment-section', condition: exportOptions.paymentChart, display: 'grid', forceNewPage: true },
+      { id: 'report-daily-table', condition: exportOptions.dailyTable, display: 'block', forceNewPage: true },
+      { id: 'report-footer', condition: true, display: 'flex', forceNewPage: false },
+    ];
+
     try {
-      const imgData = await toPng(reportElement, { 
-        backgroundColor: exportOptions.theme === 'minimal' ? '#ffffff' : '#f8fafc',
-        pixelRatio: 2,
-        cacheBust: true,
-      });
-      
       const orientation = exportOptions.orientation === 'portrait' ? 'p' : 'l';
       const pdf = new jsPDF(orientation, 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeightLimit = pdf.internal.pageSize.getHeight();
+      const margin = 10; // 10mm margin
+      const contentWidth = pdfWidth - margin * 2;
       
-      // Create a temporary image to get dimensions
-      const img = new Image();
-      img.src = imgData;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-      
-      const pdfHeight = (img.height * pdfWidth) / img.width;
-      
-      // Handle multi-page if needed
-      if (pdfHeight > pdfHeightLimit) {
-        let heightLeft = pdfHeight;
-        let position = 0;
-        
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pdfHeightLimit;
-        
-        while (heightLeft >= 0) {
-          position = heightLeft - pdfHeight;
+      let currentY = margin;
+      let isFirstPage = true;
+
+      for (const section of sectionsToCapture) {
+        if (!section.condition) continue;
+        const el = document.getElementById(section.id);
+        if (!el) continue;
+
+        const originalDisplay = el.style.display;
+        el.style.display = section.display;
+
+        // Give the browser a tiny moment to apply the display style and resize charts
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        const imgData = await toPng(el, { 
+          backgroundColor: exportOptions.theme === 'minimal' ? '#ffffff' : '#f8fafc',
+          pixelRatio: 2,
+          cacheBust: true,
+        });
+
+        el.style.display = originalDisplay;
+
+        const img = new Image();
+        img.src = imgData;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        const imgHeight = (img.height * contentWidth) / img.width;
+
+        // Force new page if requested, or if it doesn't fit
+        if ((section.forceNewPage || currentY + imgHeight > pdfHeightLimit - margin) && !isFirstPage) {
           pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-          heightLeft -= pdfHeightLimit;
+          currentY = margin;
         }
-      } else {
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+        // If the image itself is taller than a page, we might need to split it, 
+        // but since we are capturing sections, they should generally fit on a page.
+        // For the daily table, it might be very long.
+        if (imgHeight > pdfHeightLimit - margin * 2) {
+           let heightLeft = imgHeight;
+           let position = currentY;
+           
+           pdf.addImage(imgData, 'PNG', margin, position, contentWidth, imgHeight);
+           heightLeft -= (pdfHeightLimit - currentY - margin);
+           
+           while (heightLeft > 0) {
+             position -= (pdfHeightLimit - margin * 2); // Shift up by one page height
+             pdf.addPage();
+             pdf.addImage(imgData, 'PNG', margin, margin + position, contentWidth, imgHeight);
+             heightLeft -= (pdfHeightLimit - margin * 2);
+           }
+           currentY = pdfHeightLimit - margin; // Force new page for next item
+        } else {
+          pdf.addImage(imgData, 'PNG', margin, currentY, contentWidth, imgHeight);
+          currentY += imgHeight + 10; // Add 10mm spacing between sections
+        }
+        
+        isFirstPage = false;
       }
       
       const fileName = exportOptions.reportName.replace(/[/\\?%*:|"<>]/g, '-') || `rapport-recettes-${format(new Date(), 'yyyy-MM-dd')}`;
@@ -486,13 +511,6 @@ export function Reports() {
         reportElement.style.width = originalWidth;
         reportElement.style.padding = originalPadding;
       }
-      if (comparisonEl) comparisonEl.style.display = originalDisplay.comparison || '';
-      if (kpisEl) kpisEl.style.display = originalDisplay.kpis || '';
-      if (mainChartEl) mainChartEl.style.display = originalDisplay.mainChart || '';
-      if (paymentChartEl) paymentChartEl.style.display = originalDisplay.paymentChart || '';
-      if (dailyTableEl) dailyTableEl.style.display = originalDisplay.dailyTable || '';
-      if (headerEl) headerEl.style.display = originalDisplay.header || 'none';
-      if (footerEl) footerEl.style.display = originalDisplay.footer || 'none';
       
       setIsGeneratingPDF(false);
     }
@@ -643,9 +661,18 @@ export function Reports() {
   };
 
   // Prepare data for charts
-  const timeIntervals = period === 'monthly' 
-    ? eachMonthOfInterval({ start: parseISO(startDate), end: parseISO(endDate) })
-    : eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
+  let timeIntervals: Date[] = [];
+  try {
+    const start = parseISO(startDate);
+    const end = parseISO(endDate);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+      timeIntervals = period === 'monthly' 
+        ? eachMonthOfInterval({ start, end })
+        : eachDayOfInterval({ start, end });
+    }
+  } catch (e) {
+    console.error("Invalid date interval", e);
+  }
 
   const chartData = timeIntervals.map((intervalDate, index) => {
     let currentPeriodRevs;
@@ -789,7 +816,68 @@ export function Reports() {
     { id: 'transfer', name: 'Virement', value: transferTotal, color: '#64748b' },
   ].filter(item => item.value > 0 && visibleChartPayments[item.id as keyof typeof visibleChartPayments]);
 
+  const generateAiAnalysis = async () => {
+    setIsGeneratingAnalysis(true);
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("API Key missing");
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const bestDayAmount = chartData.length > 0 ? Math.max(...chartData.map(r => r.total)) : 0;
+      
+      const paymentStats = paymentTotals.map(p => `${p.name}: ${p.value.toFixed(2)}€`).join(', ');
+      
+      const dailyDetails = chartData.map(d => 
+        `${d.date}: Total ${d.total.toFixed(2)}€ (CB: ${d.cb.toFixed(2)}€, Espèces: ${d.cash.toFixed(2)}€, TR: ${d.tr.toFixed(2)}€, AMEX: ${d.amex.toFixed(2)}€)`
+      ).join('\n        ');
+      
+      const prompt = `
+        Tu es un analyste financier expert. Rédige une analyse comparative détaillée pour ce rapport de recettes.
+        
+        Données de la période :
+        - Chiffre d'affaires total : ${totalRevenue.toFixed(2)}€ (Période précédente : ${compTotalRevenue.toFixed(2)}€)
+        - Moyenne par jour : ${avgRevenue.toFixed(2)}€
+        - Meilleure journée : ${bestDayAmount.toFixed(2)}€
+        - Répartition par moyen de paiement : ${paymentStats}
+        
+        Détail journalier :
+        ${dailyDetails}
+        
+        Analyse par rapport à tous les éléments suivants :
+        1. L'évolution du chiffre d'affaires total.
+        2. La moyenne par jour et la meilleure journée.
+        3. L'évolution par moyen de paiement, surtout le détail journalier des paiements.
+        4. Différencier les différents moyens de paiement et leur part de marché.
+        
+        Format : 
+        - Utilise des paragraphes clairs.
+        - Sois professionnel, précis et concis.
+        - Ne mets pas de titre principal, commence directement par l'analyse.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+      });
+
+      setAiAnalysisContent(response.text || "Analyse non disponible.");
+    } catch (error) {
+      console.error("Error generating AI analysis:", error);
+      setAiAnalysisContent("Erreur lors de la génération de l'analyse. Veuillez réessayer.");
+    } finally {
+      setIsGeneratingAnalysis(false);
+    }
+  };
+
+  const handleAiAnalysisToggle = (checked: boolean) => {
+    setExportOptions({...exportOptions, aiAnalysis: checked});
+    if (checked && !aiAnalysisContent) {
+      generateAiAnalysis();
+    }
+  };
+
   const sendByEmail = () => {
+    if (!startDate || !endDate) return;
     const formatCurrency = (val: number) => val.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
     
     const subject = encodeURIComponent(`Rapport Financier - ${format(parseISO(startDate), 'dd/MM/yyyy')} au ${format(parseISO(endDate), 'dd/MM/yyyy')}`);
@@ -821,6 +909,7 @@ NordicRevenueS`);
   };
 
   const handleShare = async () => {
+    if (!startDate || !endDate) return;
     const formatCurrency = (val: number) => val.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
     
     const title = `Rapport Financier - ${format(parseISO(startDate), 'dd/MM/yyyy')} au ${format(parseISO(endDate), 'dd/MM/yyyy')}`;
@@ -875,80 +964,89 @@ Généré par NordicRevenueS`;
           
           {/* Smart Establishment Selector */}
           <div className="mt-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Store size={12} /> Sélectionner un établissement
-              </p>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setSelectedEst('all')}
-                  className={`text-[10px] font-black px-3 py-1.5 rounded-full transition-all ${selectedEst === 'all' ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                >
-                  TOUS LES ÉTABLISSEMENTS
-                </button>
-                <div className="h-4 w-px bg-slate-200"></div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{establishments.length} Établissements</span>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {establishments.slice(0, 8).map(est => (
-                <button
-                  key={est.id}
-                  onClick={() => setSelectedEst(est.id)}
-                  className={`group relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all active:scale-95 overflow-hidden ${selectedEst === est.id ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400 hover:shadow-md'}`}
-                >
-                  <div className={`w-2.5 h-2.5 rounded-full transition-all ${selectedEst === est.id ? 'bg-white scale-110' : 'bg-blue-500 group-hover:scale-125'}`}></div>
-                  <span className="text-sm font-black tracking-tight">{est.name}</span>
-                  {selectedEst === est.id && (
-                    <div className="absolute -right-1 -bottom-1 opacity-10">
-                      <Store size={48} />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex-1 max-w-md">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <Store size={12} /> Établissement
+                </label>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsEstDropdownOpen(!isEstDropdownOpen)}
+                    className="w-full flex items-center justify-between bg-white border border-slate-200 hover:border-blue-400 rounded-2xl px-4 py-3 text-left transition-all focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedEst === 'all' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}`}>
+                        <Store size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">
+                          {selectedEst === 'all' ? 'Tous les établissements' : establishments.find(e => e.id === selectedEst)?.name || 'Sélectionner...'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {selectedEst === 'all' ? `${establishments.length} établissements disponibles` : 'Établissement spécifique'}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronDown size={20} className={`text-slate-400 transition-transform ${isEstDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isEstDropdownOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      <div className="p-2 border-b border-slate-100">
+                        <div className="relative">
+                          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Rechercher un établissement..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-transparent rounded-xl text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto custom-scrollbar p-2">
+                        <button
+                          onClick={() => {
+                            setSelectedEst('all');
+                            setIsEstDropdownOpen(false);
+                            setSearchQuery('');
+                          }}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left mb-1 ${selectedEst === 'all' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedEst === 'all' ? 'bg-blue-200 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                            <Layout size={16} />
+                          </div>
+                          <span className="text-sm font-bold">Tous les établissements</span>
+                          {selectedEst === 'all' && <CheckCircle2 size={16} className="ml-auto text-blue-600" />}
+                        </button>
+                        
+                        {filteredEstablishments.map(est => (
+                          <button
+                            key={est.id}
+                            onClick={() => {
+                              setSelectedEst(est.id);
+                              setIsEstDropdownOpen(false);
+                              setSearchQuery('');
+                            }}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left ${selectedEst === est.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedEst === est.id ? 'bg-blue-200 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                              <Store size={16} />
+                            </div>
+                            <span className="text-sm font-bold">{est.name}</span>
+                            {selectedEst === est.id && <CheckCircle2 size={16} className="ml-auto text-blue-600" />}
+                          </button>
+                        ))}
+                        
+                        {filteredEstablishments.length === 0 && (
+                          <div className="p-4 text-center text-sm text-slate-500">
+                            Aucun établissement trouvé
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-                </button>
-              ))}
-              
-              <div className="relative group min-w-[200px]">
-                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Rechercher..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-                
-                {/* Search Results Dropdown */}
-                {searchQuery && filteredEstablishments.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar p-2 animate-in slide-in-from-top-2 duration-200">
-                    {filteredEstablishments.map(est => (
-                      <button
-                        key={est.id}
-                        onClick={() => {
-                          setSelectedEst(est.id);
-                          setSearchQuery('');
-                        }}
-                        className="w-full flex items-center justify-between p-3 hover:bg-blue-50 rounded-xl transition-all text-left group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600 rounded-lg flex items-center justify-center transition-all">
-                            <Store size={16} />
-                          </div>
-                          <span className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{est.name}</span>
-                        </div>
-                        <ArrowUpRight size={14} className="text-slate-300 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all" />
-                      </button>
-                    ))}
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </div>
@@ -1139,7 +1237,7 @@ Généré par NordicRevenueS`;
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Période du Rapport</p>
                 <p className="text-sm font-semibold text-slate-700">
-                  Du {format(parseISO(startDate), 'dd/MM/yyyy')} au {format(parseISO(endDate), 'dd/MM/yyyy')}
+                  Du {startDate && !isNaN(parseISO(startDate).getTime()) ? format(parseISO(startDate), 'dd/MM/yyyy') : '...'} au {endDate && !isNaN(parseISO(endDate).getTime()) ? format(parseISO(endDate), 'dd/MM/yyyy') : '...'}
                 </p>
               </div>
               <div>
@@ -1285,6 +1383,43 @@ Généré par NordicRevenueS`;
             </div>
           </div>
 
+          {/* AI Analysis Section */}
+          {(exportOptions.aiAnalysis && (aiAnalysisContent || isGeneratingAnalysis)) && (
+            <div id="report-ai-analysis" className={`p-8 rounded-3xl ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-indigo-50/30 border-indigo-100 border-2 shadow-xl shadow-indigo-50' : 
+              'bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-100 border shadow-sm'
+            }`}>
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`p-3 rounded-xl ${
+                  exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 
+                  exportOptions.theme === 'bold' ? 'bg-indigo-100 text-indigo-600' : 
+                  'bg-white text-indigo-600 shadow-sm'
+                }`}>
+                  <Sparkles size={24} />
+                </div>
+                <h3 className={`text-xl font-bold ${
+                  exportOptions.theme === 'bold' ? 'text-indigo-600' : 'text-slate-900'
+                }`}>Analyse Comparative IA</h3>
+              </div>
+              
+              {isGeneratingAnalysis ? (
+                <div className="flex items-center gap-3 text-indigo-600 py-8 justify-center">
+                  <Loader2 className="animate-spin" size={24} />
+                  <span className="font-medium">Génération de l'analyse en cours...</span>
+                </div>
+              ) : (
+                <div className={`text-sm leading-relaxed space-y-4 ${
+                  exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-700'
+                }`}>
+                  {aiAnalysisContent?.split('\n').map((paragraph, idx) => (
+                    paragraph.trim() ? <p key={idx}>{paragraph}</p> : null
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Main Chart */}
           <div id="report-main-chart" className={`p-6 rounded-2xl border ${
             exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
@@ -1355,7 +1490,7 @@ Généré par NordicRevenueS`;
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div id="report-payment-section" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Payment Breakdown Pie Chart */}
             <div id="report-payment-chart" className={`p-6 rounded-2xl border ${
               exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
@@ -1541,7 +1676,7 @@ Généré par NordicRevenueS`;
                       return (
                         <tr key={rev.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                           <td className="py-3 px-4">
-                            <div className="font-medium text-slate-900">{format(parseISO(rev.date), 'dd/MM/yyyy')}</div>
+                            <div className="font-medium text-slate-900">{rev.date && !isNaN(parseISO(rev.date).getTime()) ? format(parseISO(rev.date), 'dd/MM/yyyy') : rev.date}</div>
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">
                               {est?.name || 'Inconnu'} • {rev.service || '-'}
                             </div>
@@ -1833,6 +1968,52 @@ Généré par NordicRevenueS`;
                 </div>
               ) : (
                 <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Établissement</p>
+                      <select
+                        value={selectedEst}
+                        onChange={(e) => setSelectedEst(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                      >
+                        <option value="all">Tous les établissements</option>
+                        {establishments.map(est => (
+                          <option key={est.id} value={est.id}>{est.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Période</p>
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                        <input 
+                          type="date" 
+                          value={startDate} 
+                          onChange={(e) => {
+                            const newStartDate = e.target.value;
+                            setStartDate(newStartDate);
+                            if (newStartDate > endDate) {
+                              setEndDate(newStartDate);
+                            }
+                          }}
+                          className="text-sm font-semibold text-slate-700 outline-none bg-transparent w-full"
+                        />
+                        <span className="text-slate-400">-</span>
+                        <input 
+                          type="date" 
+                          value={endDate} 
+                          onChange={(e) => {
+                            const newEndDate = e.target.value;
+                            setEndDate(newEndDate);
+                            if (newEndDate < startDate) {
+                              setStartDate(newEndDate);
+                            }
+                          }}
+                          className="text-sm font-semibold text-slate-700 outline-none bg-transparent w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nom du rapport</p>
                     <input 
@@ -1984,6 +2165,25 @@ Généré par NordicRevenueS`;
                         <span className="text-[10px] text-slate-400 font-medium">Liste exhaustive des recettes journalières</span>
                       </div>
                     </label>
+
+                    <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.aiAnalysis ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.aiAnalysis ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                        {exportOptions.aiAnalysis && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={exportOptions.aiAnalysis}
+                        onChange={(e) => handleAiAnalysisToggle(e.target.checked)}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="block text-sm font-bold text-slate-700">Analyse IA Comparative</span>
+                          <Sparkles size={14} className="text-indigo-500" />
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-medium">Analyse détaillée par Gemini</span>
+                      </div>
+                    </label>
                   </div>
 
                   <div className="pt-4 sticky bottom-0 bg-white border-t border-slate-100 mt-4">
@@ -1996,7 +2196,7 @@ Généré par NordicRevenueS`;
                       </button>
                       <button 
                         onClick={generatePDF}
-                        disabled={!Object.values(exportOptions).some(v => typeof v === 'boolean' && v)}
+                        disabled={loading || !Object.values(exportOptions).some(v => typeof v === 'boolean' && v)}
                         className="flex-[2] px-6 py-4 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-2xl transition-all shadow-lg shadow-blue-200 active:scale-95 flex items-center justify-center gap-2"
                       >
                         <Download size={18} />

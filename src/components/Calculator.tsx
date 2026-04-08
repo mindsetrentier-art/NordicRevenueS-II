@@ -181,8 +181,10 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
     if (initialValue !== undefined) {
       setDisplay(initialValue);
       setWaitingForNewValue(false);
+      setPreviousValue(null);
+      setOperator(null);
     }
-  }, [initialValue]);
+  }, [initialValue, activePaymentType]);
 
   // Handle dragging
   useEffect(() => {
