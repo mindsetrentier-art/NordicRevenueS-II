@@ -20,6 +20,7 @@ import { WeatherWidget } from './WeatherWidget';
 import { ProverbWidget } from './ProverbWidget';
 import { HistoricalBar } from './HistoricalBar';
 import { QuizSidebar } from './QuizSidebar';
+import { NewsTicker } from './NewsTicker';
 
 export function Layout() {
   const { userProfile, logout } = useAuth();
@@ -41,18 +42,22 @@ export function Layout() {
   ];
 
   return (
-    <div 
-      className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900 transition-colors duration-500"
-      style={{
-        boxShadow: `inset 0 0 0 4px var(--theme-color), inset 0 0 20px 4px var(--theme-color-light)`
-      }}
-    >
-      <MusicPlayer />
-      <WeatherWidget />
-      <ProverbWidget />
-      <HistoricalBar />
-      <QuizSidebar />
-      {/* Mobile Header */}
+    <div className="min-h-screen flex flex-col font-sans text-slate-900 transition-colors duration-500">
+      <NewsTicker />
+      
+      <div 
+        className="flex-1 flex flex-col lg:flex-row bg-slate-50 relative"
+        style={{
+          boxShadow: `inset 0 0 0 4px var(--theme-color), inset 0 0 20px 4px var(--theme-color-light)`
+        }}
+      >
+        <MusicPlayer />
+        <WeatherWidget />
+        <ProverbWidget />
+        <HistoricalBar />
+        <QuizSidebar />
+        
+        {/* Mobile Header */}
       <header className="lg:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2">
           <Logo className="w-8 h-8 rounded-lg shadow-sm" />
@@ -152,5 +157,6 @@ export function Layout() {
         ))}
       </nav>
     </div>
+  </div>
   );
 }

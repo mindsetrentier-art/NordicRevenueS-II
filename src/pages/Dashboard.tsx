@@ -21,6 +21,7 @@ import {
   X,
   Calendar
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart, 
   Bar, 
@@ -371,35 +372,39 @@ export function Dashboard() {
           <p className="text-slate-500 text-sm mt-1">Aperçu de vos performances financières</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => {
-                const newStartDate = e.target.value;
-                setStartDate(newStartDate);
-                if (newStartDate > endDate) {
-                  setEndDate(newStartDate);
-                }
-              }}
-              className="text-sm text-slate-700 outline-none bg-transparent"
-            />
-            <span className="text-slate-400">-</span>
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => {
-                const newEndDate = e.target.value;
-                setEndDate(newEndDate);
-                if (newEndDate < startDate) {
-                  setStartDate(newEndDate);
-                }
-              }}
-              className="text-sm text-slate-700 outline-none bg-transparent"
-            />
+        <div className="flex flex-col lg:flex-row gap-4 items-end">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-sm hover:shadow-md transition-all duration-300 group">
+            <Calendar size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => {
+                  const newStartDate = e.target.value;
+                  setStartDate(newStartDate);
+                  if (newStartDate > endDate) {
+                    setEndDate(newStartDate);
+                  }
+                }}
+                className="text-sm font-semibold text-slate-700 outline-none bg-transparent cursor-pointer"
+              />
+              <span className="text-slate-300 font-bold">/</span>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => {
+                  const newEndDate = e.target.value;
+                  setEndDate(newEndDate);
+                  if (newEndDate < startDate) {
+                    setStartDate(newEndDate);
+                  }
+                }}
+                className="text-sm font-semibold text-slate-700 outline-none bg-transparent cursor-pointer"
+              />
+            </div>
           </div>
-          <div className="relative w-full sm:w-64">
+
+          <div className="w-full lg:w-72">
             <SearchableSelect
               options={[
                 { id: 'all', name: 'Tous les établissements' },
@@ -407,11 +412,12 @@ export function Dashboard() {
               ]}
               value={selectedEst}
               onChange={setSelectedEst}
-              placeholder="Sélectionner un établissement"
-              icon={<Store size={16} />}
+              placeholder="Établissement"
+              icon={<Store size={18} />}
             />
           </div>
-          <div className="relative w-full sm:w-48">
+
+          <div className="w-full lg:w-64">
             <SearchableSelect
               options={[
                 { id: 'all', name: 'Tous les services' },
@@ -420,8 +426,8 @@ export function Dashboard() {
               ]}
               value={selectedService}
               onChange={setSelectedService}
-              placeholder="Sélectionner un service"
-              icon={<Clock size={16} />}
+              placeholder="Service"
+              icon={<Clock size={18} />}
             />
           </div>
         </div>
@@ -456,84 +462,57 @@ export function Dashboard() {
 
       {/* KPI Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500 mb-1">Chiffre d'Affaires Total</p>
-          <p className="text-3xl font-black text-slate-900">
-            {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-          </p>
-          <p className="text-xs text-slate-400 mt-2">Sur la période sélectionnée</p>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500 mb-1">Moyenne par Jour</p>
-          <p className="text-3xl font-black text-slate-900">
-            {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-          </p>
-          <p className="text-xs text-slate-400 mt-2">Sur {uniqueDays} jours d'activité</p>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500 mb-1">Meilleure Journée</p>
-          <p className="text-3xl font-black text-emerald-600">
-            {bestDay ? bestDay.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : '0,00 €'}
-          </p>
-          <p className="text-xs text-slate-400 mt-2">
-            {bestDay ? format(new Date(bestDay.date), 'dd MMMM yyyy', { locale: fr }) : '-'}
-          </p>
-        </div>
+        {[
+          { label: "Chiffre d'Affaires Total", value: totalRevenue, sub: "Sur la période sélectionnée", color: "text-slate-900" },
+          { label: "Moyenne par Jour", value: avgRevenue, sub: `Sur ${uniqueDays} jours d'activité`, color: "text-slate-900" },
+          { label: "Meilleure Journée", value: bestDay?.total || 0, sub: bestDay ? format(new Date(bestDay.date), 'dd MMMM yyyy', { locale: fr }) : '-', color: "text-emerald-600" }
+        ].map((kpi, i) => (
+          <motion.div 
+            key={kpi.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"
+          >
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">{kpi.label}</p>
+            <p className={clsx("text-3xl font-black tracking-tight", kpi.color)}>
+              {kpi.value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            </p>
+            <div className="flex items-center gap-2 mt-3">
+              <div className="w-1 h-1 rounded-full bg-slate-300" />
+              <p className="text-xs font-medium text-slate-500">{kpi.sub}</p>
+            </div>
+          </motion.div>
+        ))}
       </div>
 
       {/* Payment Breakdown Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-emerald-50 text-emerald-600 p-2 rounded-xl">
-              <Banknote size={20} />
+        {[
+          { label: "Chiffre d'Affaires", value: totalRevenue, change: revenueChange, icon: <Banknote size={20} />, color: "bg-emerald-50 text-emerald-600", isPct: false },
+          { label: "Paiements CB", value: cbPercentage, change: cbChange, icon: <CreditCard size={20} />, color: "bg-blue-50 text-blue-600", isPct: true },
+          { label: "Tickets Resto", value: trPercentage, change: trChange, icon: <Receipt size={20} />, color: "bg-amber-50 text-amber-600", isPct: true },
+          { label: "Espèces", value: cashPercentage, change: cashChange, icon: <Banknote size={20} />, color: "bg-purple-50 text-purple-600", isPct: true }
+        ].map((card, i) => (
+          <motion.div 
+            key={card.label}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3 + (i * 0.1) }}
+            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className={clsx("p-2.5 rounded-xl shadow-sm group-hover:scale-110 transition-transform", card.color)}>
+                {card.icon}
+              </div>
+              <TrendBadge value={card.change} isPercentagePoint={card.isPct && card.label !== "Chiffre d'Affaires"} />
             </div>
-            <TrendBadge value={revenueChange} />
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Chiffre d'Affaires</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-blue-50 text-blue-600 p-2 rounded-xl">
-              <CreditCard size={20} />
-            </div>
-            <TrendBadge value={cbChange} isPercentagePoint={true} />
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Paiements CB</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {Math.round(cbPercentage)}%
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-amber-50 text-amber-600 p-2 rounded-xl">
-              <Receipt size={20} />
-            </div>
-            <TrendBadge value={trChange} isPercentagePoint={true} />
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Tickets Resto</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {Math.round(trPercentage)}%
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-purple-50 text-purple-600 p-2 rounded-xl">
-              <Banknote size={20} />
-            </div>
-            <TrendBadge value={cashChange} isPercentagePoint={true} />
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Espèces</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {Math.round(cashPercentage)}%
-          </p>
-        </div>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">{card.label}</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">
+              {card.isPct ? `${Math.round(card.value)}%` : card.value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            </p>
+          </motion.div>
+        ))}
       </div>
 
       <AIInsights 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Music, Play, Pause, SkipForward, SkipBack, X, LogIn, Youtube } from 'lucide-react';
+import clsx from 'clsx';
 
-type Platform = 'spotify' | 'deezer' | 'youtube';
+type Platform = 'spotify' | 'deezer' | 'youtube' | 'special';
 
 interface Playlist {
   id: string;
@@ -18,13 +19,22 @@ export function MusicPlayer() {
   const [tokens, setTokens] = useState<Record<Platform, string | null>>({
     spotify: null,
     deezer: null,
-    youtube: null
+    youtube: null,
+    special: 'local'
   });
   
   const [playlists, setPlaylists] = useState<Record<Platform, Playlist[]>>({
     spotify: [],
     deezer: [],
-    youtube: []
+    youtube: [],
+    special: [
+      {
+        id: 'v_vS609C96E',
+        name: 'Banana Republic',
+        imageUrl: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&q=80&w=200&h=200',
+        trackCount: 1
+      }
+    ]
   });
   
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
@@ -57,7 +67,8 @@ export function MusicPlayer() {
     setTokens({
       spotify: savedSpotify,
       deezer: savedDeezer,
-      youtube: savedYoutube
+      youtube: savedYoutube,
+      special: 'local'
     });
 
     const handleMessage = (event: MessageEvent) => {
@@ -217,17 +228,30 @@ export function MusicPlayer() {
           className="rounded-none"
         ></iframe>
       );
-    } else if (activePlatform === 'youtube') {
+    } else if (activePlatform === 'youtube' || activePlatform === 'special') {
       return (
-        <iframe 
-          width="100%" 
-          height="152" 
-          src={`https://www.youtube.com/embed/videoseries?list=${selectedPlaylist}`} 
-          frameBorder="0" 
-          allow="autoplay; encrypted-media" 
-          allowFullScreen
-          className="rounded-none"
-        ></iframe>
+        <div className="relative w-full h-full bg-black flex items-center justify-center">
+          <iframe 
+            width="100%" 
+            height="152" 
+            src={activePlatform === 'special' 
+              ? `https://www.youtube.com/embed/${selectedPlaylist}?autoplay=1&controls=1` 
+              : `https://www.youtube.com/embed/videoseries?list=${selectedPlaylist}`} 
+            frameBorder="0" 
+            allow="autoplay; encrypted-media; picture-in-picture" 
+            allowFullScreen
+            className="rounded-none"
+          ></iframe>
+          {activePlatform === 'special' && (
+            <button 
+              onClick={() => setSelectedPlaylist(null)}
+              className="absolute top-2 right-2 bg-black/50 hover:bg-black/80 text-white p-1.5 rounded-full transition-colors z-10"
+              title="Arrêter la musique"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
       );
     }
   };
@@ -237,6 +261,7 @@ export function MusicPlayer() {
       case 'spotify': return 'bg-emerald-500 hover:bg-emerald-600';
       case 'deezer': return 'bg-purple-600 hover:bg-purple-700';
       case 'youtube': return 'bg-red-600 hover:bg-red-700';
+      case 'special': return 'bg-yellow-500 hover:bg-yellow-600';
     }
   };
 
@@ -245,6 +270,7 @@ export function MusicPlayer() {
       case 'spotify': return 'text-emerald-500';
       case 'deezer': return 'text-purple-600';
       case 'youtube': return 'text-red-600';
+      case 'special': return 'text-yellow-600';
     }
   };
 
@@ -284,20 +310,24 @@ export function MusicPlayer() {
           </div>
 
           <div className="flex border-b border-slate-200 bg-slate-50">
-            {(['spotify', 'deezer', 'youtube'] as Platform[]).map((p) => (
+            {(['spotify', 'deezer', 'youtube', 'special'] as Platform[]).map((p) => (
               <button
                 key={p}
                 onClick={() => {
                   setActivePlatform(p);
-                  setSelectedPlaylist(null);
+                  if (p === 'special') {
+                    setSelectedPlaylist('v_vS609C96E');
+                  } else {
+                    setSelectedPlaylist(null);
+                  }
                 }}
-                className={`flex-1 py-3 text-sm font-medium capitalize transition-colors ${
+                className={`flex-1 py-3 text-[10px] font-bold uppercase transition-colors ${
                   activePlatform === p 
                     ? `border-b-2 border-current ${getPlatformTextColor(p)} bg-white` 
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                {p}
+                {p === 'special' ? 'Banane' : p}
               </button>
             ))}
           </div>
@@ -339,18 +369,40 @@ export function MusicPlayer() {
                   </div>
                 ) : playlists[activePlatform].length > 0 ? (
                   <div className="space-y-2">
+                    {activePlatform === 'special' && (
+                      <div className="mb-4 p-3 bg-yellow-50 rounded-xl border border-yellow-100 flex items-center gap-3">
+                        <div className="bg-yellow-500 p-2 rounded-lg text-white">
+                          <Music size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">Mode Spécial</p>
+                          <p className="text-[10px] text-slate-500">Écoutez "Banana Republic" à la demande.</p>
+                        </div>
+                      </div>
+                    )}
                     {playlists[activePlatform].map((playlist) => (
                       <button
                         key={playlist.id}
-                        onClick={() => setSelectedPlaylist(playlist.id)}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${
+                        onClick={() => {
+                          if (activePlatform === 'special' && selectedPlaylist === playlist.id) {
+                            setSelectedPlaylist(null);
+                          } else {
+                            setSelectedPlaylist(playlist.id);
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all text-left group ${
                           selectedPlaylist === playlist.id 
-                            ? `bg-opacity-10 border ${activePlatform === 'spotify' ? 'bg-emerald-500 border-emerald-200' : activePlatform === 'deezer' ? 'bg-purple-600 border-purple-200' : 'bg-red-600 border-red-200'}` 
+                            ? `bg-opacity-10 border ${
+                                activePlatform === 'spotify' ? 'bg-emerald-500 border-emerald-200' : 
+                                activePlatform === 'deezer' ? 'bg-purple-600 border-purple-200' : 
+                                activePlatform === 'youtube' ? 'bg-red-600 border-red-200' :
+                                'bg-yellow-500 border-yellow-200'
+                              }` 
                             : 'hover:bg-slate-100 border border-transparent'
                         }`}
                       >
                         {playlist.imageUrl ? (
-                          <img src={playlist.imageUrl} alt={playlist.name} className="w-12 h-12 rounded-md object-cover" />
+                          <img src={playlist.imageUrl} alt={playlist.name} className="w-12 h-12 rounded-md object-cover shadow-sm" />
                         ) : (
                           <div className="w-12 h-12 bg-slate-200 rounded-md flex items-center justify-center text-slate-400">
                             <Music size={20} />
@@ -360,6 +412,20 @@ export function MusicPlayer() {
                           <p className="font-medium text-slate-900 truncate text-sm">{playlist.name}</p>
                           {playlist.trackCount !== undefined && (
                             <p className="text-xs text-slate-500">{playlist.trackCount} titres</p>
+                          )}
+                        </div>
+                        <div className={clsx(
+                          "transition-opacity",
+                          selectedPlaylist === playlist.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                        )}>
+                          {selectedPlaylist === playlist.id ? (
+                            <div className={getPlatformTextColor(activePlatform)}>
+                              <Pause size={16} fill="currentColor" />
+                            </div>
+                          ) : (
+                            <div className="text-slate-400">
+                              <Play size={16} fill="currentColor" />
+                            </div>
                           )}
                         </div>
                       </button>

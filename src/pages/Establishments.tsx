@@ -22,6 +22,7 @@ export function Establishments() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
   const [latitude, setLatitude] = useState<number | undefined>();
   const [longitude, setLongitude] = useState<number | undefined>();
   const [isGeolocating, setIsGeolocating] = useState(false);
@@ -72,7 +73,7 @@ export function Establishments() {
     try {
       if (editingEst) {
         if (userProfile.role !== 'admin' && editingEst.createdBy !== userProfile.uid) {
-          alert("Vous n'êtes pas autorisé à modifier cet établissement.");
+          setError("Vous n'êtes pas autorisé à modifier cet établissement.");
           return;
         }
         await updateDoc(doc(db, 'establishments', editingEst.id), {
@@ -80,6 +81,7 @@ export function Establishments() {
           address,
           city,
           postalCode,
+          vatNumber: vatNumber || null,
           latitude: latitude || null,
           longitude: longitude || null,
           updatedAt: serverTimestamp()
@@ -90,6 +92,7 @@ export function Establishments() {
           address,
           city,
           postalCode,
+          vatNumber: vatNumber || null,
           latitude: latitude || null,
           longitude: longitude || null,
           createdBy: userProfile.uid,
@@ -163,6 +166,7 @@ export function Establishments() {
     setAddress(est.address || '');
     setCity(est.city || '');
     setPostalCode(est.postalCode || '');
+    setVatNumber(est.vatNumber || '');
     setLatitude(est.latitude);
     setLongitude(est.longitude);
     setIsModalOpen(true);
@@ -174,13 +178,14 @@ export function Establishments() {
     setAddress('');
     setCity('');
     setPostalCode('');
+    setVatNumber('');
     setLatitude(undefined);
     setLongitude(undefined);
   };
 
   const handleGeolocate = () => {
     if (!navigator.geolocation) {
-      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      setError("La géolocalisation n'est pas supportée par votre navigateur.");
       return;
     }
 
@@ -193,7 +198,7 @@ export function Establishments() {
       },
       (error) => {
         console.error("Error geolocating:", error);
-        alert("Impossible de vous géolocaliser. Veuillez vérifier vos permissions.");
+        setError("Impossible de vous géolocaliser. Veuillez vérifier vos permissions.");
         setIsGeolocating(false);
       }
     );
@@ -230,8 +235,8 @@ export function Establishments() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {establishments.map(est => (
-            <div key={est.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-              <div className="flex items-start justify-between mb-4">
+            <div key={est.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col group relative overflow-hidden">
+              <div className="flex items-start justify-between mb-4 relative z-10">
                 <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
                   <Store size={24} />
                 </div>
@@ -255,14 +260,22 @@ export function Establishments() {
                 </div>
               </div>
               
-              <h3 className="text-lg font-bold text-slate-900 mb-1">{est.name}</h3>
-              <p className="text-sm text-slate-500 flex-1">
+              <h3 className="text-lg font-bold text-slate-900 mb-1 relative z-10">{est.name}</h3>
+              <p className="text-sm text-slate-500 flex-1 relative z-10">
                 {est.address ? `${est.address}, ${est.postalCode} ${est.city}` : 'Aucune adresse renseignée'}
               </p>
               
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium relative z-10">
                 <span>ID: {est.id.substring(0, 8)}...</span>
               </div>
+
+              {/* Hover Overlay for VAT Number */}
+              {est.vatNumber && (
+                <div className="absolute inset-0 bg-blue-600/95 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white z-20 p-6 text-center">
+                  <p className="text-sm font-medium text-blue-100 mb-1 uppercase tracking-wider">Numéro de TVA</p>
+                  <p className="text-xl font-bold tracking-widest">{est.vatNumber}</p>
+                </div>
+              )}
             </div>
           ))}
           
@@ -305,14 +318,14 @@ export function Establishments() {
                   <p className="text-sm">{error}</p>
                 </div>
               )}
-              <div>
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nom de l'établissement *</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   placeholder="Ex: Brasserie Centrale"
                 />
               </div>
@@ -349,6 +362,17 @@ export function Establishments() {
                     placeholder="Ex: Paris"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Numéro de TVA (Optionnel)</label>
+                <input
+                  type="text"
+                  value={vatNumber}
+                  onChange={(e) => setVatNumber(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Ex: FR 12 345678901"
+                />
               </div>
 
               <div className="space-y-3">

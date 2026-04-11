@@ -42,12 +42,44 @@
           "type": "string",
           "description": "Name of the establishment"
         },
+        "address": {
+          "type": "string",
+          "description": "Street address"
+        },
+        "city": {
+          "type": "string",
+          "description": "City"
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "Postal code"
+        },
+        "vatNumber": {
+          "type": "string",
+          "description": "VAT number (Numéro de TVA)"
+        },
+        "latitude": {
+          "type": "number",
+          "description": "Geographic latitude"
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Geographic longitude"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the user who created the establishment"
+        },
         "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
           "type": "string",
           "format": "date-time"
         }
       },
-      "required": ["name", "createdAt"]
+      "required": ["name", "createdAt", "createdBy"]
     },
     "Revenue": {
       "title": "Revenue",

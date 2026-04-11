@@ -32,14 +32,14 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
 
   const generateInsights = async () => {
     if (!ai) {
-      setError("Clé API Gemini manquante. Veuillez configurer VITE_GEMINI_API_KEY.");
+      setError("Clé API Gemini manquante. Veuillez configurer la variable d'environnement VITE_GEMINI_API_KEY ou GEMINI_API_KEY.");
       return;
     }
 
     // Check for quota cooldown
     const lastQuotaError = localStorage.getItem('ai_insights_quota_error');
     if (lastQuotaError && Date.now() - parseInt(lastQuotaError) < 900000) { // 15 min
-      setError("Quota d'analyse IA dépassé. Veuillez réessayer dans quelques minutes.");
+      setError("Quota d'analyse IA dépassé. Veuillez vérifier votre forfait Gemini ou réessayer dans quelques minutes.");
       return;
     }
 
@@ -78,11 +78,13 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
       localStorage.removeItem('ai_insights_quota_error');
     } catch (err: any) {
       console.error("Erreur IA:", err);
-      if (err.message?.includes('429') || err.message?.includes('quota')) {
+      if (err?.status === 429 || err.message?.includes('429') || err.message?.includes('RESOURCE_EXHAUSTED') || err.message?.includes('quota')) {
         localStorage.setItem('ai_insights_quota_error', Date.now().toString());
-        setError("Quota d'analyse IA dépassé. Veuillez réessayer plus tard.");
+        setError("Quota d'utilisation de l'IA dépassé. Veuillez vérifier votre forfait Gemini ou réessayer plus tard.");
+      } else if (err?.status === 401 || err?.status === 403 || err.message?.includes('API_KEY_INVALID')) {
+        setError("Clé API Gemini invalide ou non autorisée. Veuillez vérifier vos paramètres.");
       } else {
-        setError("Impossible de générer l'analyse IA pour le moment.");
+        setError("Une erreur inattendue s'est produite lors de la génération de l'analyse IA.");
       }
     } finally {
       setLoading(false);

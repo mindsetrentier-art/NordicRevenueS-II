@@ -366,18 +366,22 @@ export function Alerts() {
                       <button 
                         onClick={() => toggleAlertStatus(alert)}
                         className={clsx(
-                          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors",
-                          alert.isActive ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors border",
+                          alert.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200/60 hover:bg-emerald-100" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                         )}
                         title={alert.isActive ? "Désactiver" : "Activer"}
                       >
                         {alert.isActive ? (
                           <>
-                            <CheckCircle2 size={12} /> Actif
+                            <div className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </div>
+                            Actif
                           </>
                         ) : (
                           <>
-                            <X size={12} /> Inactif
+                            <X size={12} className="text-slate-400" /> Inactif
                           </>
                         )}
                       </button>

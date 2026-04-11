@@ -576,6 +576,54 @@ function ServiceSection({
   isActive: boolean;
   onToggleActive: () => void;
 }) {
+  const [isListeningNotes, setIsListeningNotes] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const toggleListeningNotes = () => {
+    if (!isActive) return;
+
+    if (isListeningNotes) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListeningNotes(false);
+      return;
+    }
+    
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setIsListeningNotes(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setNotes(prev => prev ? prev + ' ' + transcript : transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListeningNotes(false);
+    };
+
+    recognition.onend = () => {
+      setIsListeningNotes(false);
+    };
+
+    recognition.start();
+  };
+
   const handleInputChange = (field: keyof Payments, value: string) => {
     if (!activeMethods[field] || !isActive) return;
     const numValue = value === '' ? 0 : parseFloat(value);
@@ -596,26 +644,40 @@ function ServiceSection({
     const activeFields = fields.filter(f => activeMethods[f]);
     if (activeFields.length === 0) return;
 
-    const distributedValue = Number((numTotal / activeFields.length).toFixed(2));
-    
     setPayments(prev => {
       const next = { ...prev };
-      fields.forEach(f => {
-        next[f] = 0;
-      });
-      
-      activeFields.forEach(f => {
-        next[f] = distributedValue;
-      });
-      
-      // Adjust for rounding errors
-      const currentSum = activeFields.reduce((acc, f) => acc + distributedValue, 0);
-      const diff = numTotal - currentSum;
-      if (Math.abs(diff) > 0.001 && activeFields.length > 0) {
-        const lastField = activeFields[activeFields.length - 1];
-        next[lastField] = Number((next[lastField] + diff).toFixed(2));
+      const currentGroupSum = activeFields.reduce((sum, f) => sum + prev[f], 0);
+
+      if (currentGroupSum === 0) {
+        // Fallback to equal distribution if current values are all zero
+        const distributedValue = Number((numTotal / activeFields.length).toFixed(2));
+        activeFields.forEach(f => {
+          next[f] = distributedValue;
+        });
+      } else {
+        // Proportional distribution
+        activeFields.forEach(f => {
+          const ratio = prev[f] / currentGroupSum;
+          next[f] = Number((numTotal * ratio).toFixed(2));
+        });
       }
-      
+
+      // Reset inactive fields in the group
+      fields.forEach(f => {
+        if (!activeMethods[f]) next[f] = 0;
+      });
+
+      // Adjust for rounding errors to ensure the sum matches the entered total
+      const newSum = activeFields.reduce((sum, f) => sum + next[f], 0);
+      const diff = numTotal - newSum;
+      if (Math.abs(diff) > 0.001 && activeFields.length > 0) {
+        // Add the difference to the field with the largest value to minimize relative impact
+        const fieldToAdjust = activeFields.reduce((prevField, currField) => 
+          next[currField] > next[prevField] ? currField : prevField
+        , activeFields[0]);
+        next[fieldToAdjust] = Number((next[fieldToAdjust] + diff).toFixed(2));
+      }
+
       return next;
     });
   };
@@ -650,20 +712,12 @@ function ServiceSection({
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
               <CreditCard className="text-blue-600" size={16} /> Cartes Bancaires
             </h3>
-            <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">Total</span>
-              <div className="flex items-center">
-                <span className="text-blue-600 font-bold text-sm mr-1">€</span>
-                <input 
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="w-20 bg-transparent border-none p-0 text-sm font-black text-blue-700 focus:ring-0 placeholder:text-blue-200"
-                  value={(payments.cb + payments.cbContactless) || ''}
-                  onChange={(e) => handleGroupTotalChange('cb', e.target.value)}
-                />
-              </div>
-            </div>
+            <GroupTotalInput 
+              label="Total"
+              value={payments.cb + payments.cbContactless}
+              onChange={(v) => handleGroupTotalChange('cb', v)}
+              colorClass="blue"
+            />
           </div>
           <div className="grid grid-cols-1 gap-4">
             <PaymentInput 
@@ -693,20 +747,12 @@ function ServiceSection({
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
               <CreditCard className="text-amber-600" size={16} /> American Express
             </h3>
-            <div className="flex items-center gap-2 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
-              <span className="text-[10px] font-black text-amber-400 uppercase tracking-tighter">Total</span>
-              <div className="flex items-center">
-                <span className="text-amber-600 font-bold text-sm mr-1">€</span>
-                <input 
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="w-20 bg-transparent border-none p-0 text-sm font-black text-amber-700 focus:ring-0 placeholder:text-amber-200"
-                  value={(payments.amex + payments.amexContactless) || ''}
-                  onChange={(e) => handleGroupTotalChange('amex', e.target.value)}
-                />
-              </div>
-            </div>
+            <GroupTotalInput 
+              label="Total"
+              value={payments.amex + payments.amexContactless}
+              onChange={(v) => handleGroupTotalChange('amex', v)}
+              colorClass="amber"
+            />
           </div>
           <div className="grid grid-cols-1 gap-4">
             <PaymentInput 
@@ -736,20 +782,12 @@ function ServiceSection({
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
               <Receipt className="text-emerald-600" size={16} /> Titres-Restaurant
             </h3>
-            <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
-              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Total</span>
-              <div className="flex items-center">
-                <span className="text-emerald-600 font-bold text-sm mr-1">€</span>
-                <input 
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="w-20 bg-transparent border-none p-0 text-sm font-black text-emerald-700 focus:ring-0 placeholder:text-emerald-200"
-                  value={(payments.tr + payments.trContactless) || ''}
-                  onChange={(e) => handleGroupTotalChange('tr', e.target.value)}
-                />
-              </div>
-            </div>
+            <GroupTotalInput 
+              label="Total"
+              value={payments.tr + payments.trContactless}
+              onChange={(v) => handleGroupTotalChange('tr', v)}
+              colorClass="emerald"
+            />
           </div>
           <div className="grid grid-cols-1 gap-4">
             <PaymentInput 
@@ -802,16 +840,34 @@ function ServiceSection({
 
         {/* Notes */}
         <div className="pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
-            <MessageSquare className="text-slate-500" size={16} /> Notes (Optionnel)
-          </h3>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            disabled={!isActive}
-            placeholder="Ajoutez un commentaire sur ce service..."
-            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
+              <MessageSquare className="text-slate-500" size={16} /> Notes (Optionnel)
+            </h3>
+            <button
+              type="button"
+              onClick={toggleListeningNotes}
+              disabled={!isActive}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                isListeningNotes 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50'
+              }`}
+              title="Dicter une note"
+            >
+              {isListeningNotes ? <MicOff size={14} /> : <Mic size={14} />}
+              {isListeningNotes ? 'Arrêter' : 'Dicter'}
+            </button>
+          </div>
+          <div className="relative">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              disabled={!isActive}
+              placeholder={isListeningNotes ? "Écoute en cours..." : "Ajoutez un commentaire sur ce service..."}
+              className={`w-full bg-slate-50 border ${isListeningNotes ? 'border-blue-400 ring-2 ring-blue-500/20' : 'border-slate-200'} text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed`}
+            />
+          </div>
         </div>
 
         {/* Attachments */}
@@ -1020,6 +1076,105 @@ function PaymentInput({
         </div>
       </div>
       {error && <p className="text-xs text-red-500 mt-1.5 ml-1 font-medium">{error}</p>}
+    </div>
+  );
+}
+
+function GroupTotalInput({ 
+  label, 
+  value, 
+  onChange, 
+  colorClass = 'blue' 
+}: { 
+  label: string, 
+  value: number, 
+  onChange: (val: string) => void,
+  colorClass?: 'blue' | 'amber' | 'emerald'
+}) {
+  const [isListening, setIsListening] = useState(false);
+  const [detectedAmount, setDetectedAmount] = useState<string | null>(null);
+
+  const startListening = () => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setDetectedAmount(null);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      const cleaned = transcript.replace(/\s/g, '').replace(',', '.');
+      const match = cleaned.match(/\d+(\.\d+)?/);
+      if (match) {
+        setDetectedAmount(match[0]);
+      }
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
+  const colors = {
+    blue: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-600', label: 'text-blue-400', input: 'text-blue-700', placeholder: 'text-blue-200' },
+    amber: { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-600', label: 'text-amber-400', input: 'text-amber-700', placeholder: 'text-amber-200' },
+    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-600', label: 'text-emerald-400', input: 'text-emerald-700', placeholder: 'text-emerald-200' }
+  };
+
+  const c = colors[colorClass];
+
+  return (
+    <div className={`flex items-center gap-2 ${c.bg} px-3 py-1.5 rounded-lg border ${c.border} relative overflow-hidden transition-all`}>
+      {detectedAmount !== null && (
+        <div className={`absolute inset-0 ${c.bg} flex items-center justify-between px-2 z-10 animate-in fade-in zoom-in duration-200`}>
+          <span className={`${c.text} font-bold text-[10px] flex items-center gap-1`}>
+            <Mic size={10} /> {detectedAmount} ?
+          </span>
+          <div className="flex items-center gap-1">
+            <button 
+              type="button"
+              onClick={() => setDetectedAmount(null)} 
+              className="p-1 rounded-full hover:bg-white/50 text-slate-400 hover:text-red-500 transition-colors"
+            >
+              <X size={10} />
+            </button>
+            <button 
+              type="button"
+              onClick={() => { onChange(detectedAmount); setDetectedAmount(null); }} 
+              className={`p-1 rounded-full ${c.text} hover:bg-white/50 transition-colors`}
+            >
+              <Check size={10} />
+            </button>
+          </div>
+        </div>
+      )}
+      <span className={`text-[10px] font-black ${c.label} uppercase tracking-tighter`}>{label}</span>
+      <div className="flex items-center">
+        <span className={`${c.text} font-bold text-sm mr-1`}>€</span>
+        <input 
+          type="number"
+          step="0.01"
+          placeholder="0.00"
+          className={`w-16 bg-transparent border-none p-0 text-sm font-black ${c.input} focus:ring-0 placeholder:${c.placeholder}`}
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={startListening}
+          className={`ml-1 p-1 rounded-md transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : `${c.text} hover:bg-white/50`}`}
+          title="Dicter le total"
+        >
+          <Mic size={12} />
+        </button>
+      </div>
     </div>
   );
 }

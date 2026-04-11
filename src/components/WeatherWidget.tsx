@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Sun, CloudRain, CloudLightning, Thermometer, Clock, ChevronDown, ChevronUp, Wind, Leaf } from 'lucide-react';
+import clsx from 'clsx';
 
 interface AirQualityData {
   aqi: number;
@@ -48,6 +49,9 @@ export function WeatherWidget() {
     const saved = localStorage.getItem('weather-widget-scale');
     return saved ? parseFloat(saved) : 1;
   });
+
+  const [showWeatherDetails, setShowWeatherDetails] = useState(false);
+  const [showAqiDetails, setShowAqiDetails] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('weather-widget-pos', JSON.stringify(position));
@@ -159,74 +163,92 @@ export function WeatherWidget() {
     if (!location) return;
 
     const fetchData = async () => {
+      if (!location) return;
+
+      // 1. Fetch Weather & Forecast
       try {
-        // Fetch weather with more details
         const weatherRes = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
         );
+        
+        if (!weatherRes.ok) throw new Error(`Weather API returned ${weatherRes.status}`);
+        
         const weatherData = await weatherRes.json();
         
-        setWeather({
-          temp: Math.round(weatherData.current.temperature_2m),
-          feelsLike: Math.round(weatherData.current.apparent_temperature),
-          humidity: weatherData.current.relative_humidity_2m,
-          windSpeed: Math.round(weatherData.current.wind_speed_10m),
-          code: weatherData.current.weather_code,
-          isDay: weatherData.current.is_day === 1
-        });
-
-        // Set forecast
-        const daily = weatherData.daily;
-        const forecastData: ForecastDay[] = daily.time.map((t: string, i: number) => ({
-          date: t,
-          code: daily.weather_code[i],
-          maxTemp: Math.round(daily.temperature_2m_max[i]),
-          minTemp: Math.round(daily.temperature_2m_min[i])
-        })).slice(1, 6); // Next 5 days
-        setForecast(forecastData);
-
-        // Fetch location name (Reverse Geocoding)
-        try {
-          const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${location.lat}&lon=${location.lon}&format=json`,
-            { headers: { 'Accept-Language': 'fr' } }
-          );
-          const geoData = await geoRes.json();
-          const city = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.suburb;
-          setLocationName(city);
-        } catch (e) {
-          console.error('Error fetching location name:', e);
+        if (weatherData.current) {
+          setWeather({
+            temp: Math.round(weatherData.current.temperature_2m),
+            feelsLike: Math.round(weatherData.current.apparent_temperature),
+            humidity: weatherData.current.relative_humidity_2m,
+            windSpeed: Math.round(weatherData.current.wind_speed_10m),
+            code: weatherData.current.weather_code,
+            isDay: weatherData.current.is_day === 1
+          });
         }
 
-        // Fetch air quality & pollen
+        if (weatherData.daily) {
+          const daily = weatherData.daily;
+          const forecastData: ForecastDay[] = daily.time.map((t: string, i: number) => ({
+            date: t,
+            code: daily.weather_code[i],
+            maxTemp: Math.round(daily.temperature_2m_max[i]),
+            minTemp: Math.round(daily.temperature_2m_min[i])
+          })).slice(1, 6);
+          setForecast(forecastData);
+        }
+      } catch (error) {
+        console.error('Error fetching weather:', error);
+      }
+
+      // 2. Fetch Location Name (Reverse Geocoding)
+      // Using BigDataCloud as it's more reliable for client-side than Nominatim
+      try {
+        const geoRes = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${location.lat}&longitude=${location.lon}&localityLanguage=fr`
+        );
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          const city = geoData.city || geoData.locality || geoData.principalSubdivision;
+          if (city) setLocationName(city);
+        }
+      } catch (e) {
+        console.error('Error fetching location name:', e);
+      }
+
+      // 3. Fetch Air Quality & Pollen
+      try {
         const aqRes = await fetch(
           `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${location.lat}&longitude=${location.lon}&current=european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen`
         );
+        
+        if (!aqRes.ok) throw new Error(`Air Quality API returned ${aqRes.status}`);
+        
         const aqData = await aqRes.json();
-        const currentAq = aqData.current;
-        const totalPollen = 
-          (currentAq.alder_pollen || 0) + 
-          (currentAq.birch_pollen || 0) + 
-          (currentAq.grass_pollen || 0) + 
-          (currentAq.mugwort_pollen || 0) + 
-          (currentAq.olive_pollen || 0) + 
-          (currentAq.ragweed_pollen || 0);
+        if (aqData.current) {
+          const currentAq = aqData.current;
+          const totalPollen = 
+            (currentAq.alder_pollen || 0) + 
+            (currentAq.birch_pollen || 0) + 
+            (currentAq.grass_pollen || 0) + 
+            (currentAq.mugwort_pollen || 0) + 
+            (currentAq.olive_pollen || 0) + 
+            (currentAq.ragweed_pollen || 0);
 
-        setAirQuality({
-          aqi: currentAq.european_aqi,
-          pollen: {
-            total: totalPollen,
-            alder: currentAq.alder_pollen || 0,
-            birch: currentAq.birch_pollen || 0,
-            grass: currentAq.grass_pollen || 0,
-            mugwort: currentAq.mugwort_pollen || 0,
-            olive: currentAq.olive_pollen || 0,
-            ragweed: currentAq.ragweed_pollen || 0
-          }
-        });
-
+          setAirQuality({
+            aqi: currentAq.european_aqi,
+            pollen: {
+              total: totalPollen,
+              alder: currentAq.alder_pollen || 0,
+              birch: currentAq.birch_pollen || 0,
+              grass: currentAq.grass_pollen || 0,
+              mugwort: currentAq.mugwort_pollen || 0,
+              olive: currentAq.olive_pollen || 0,
+              ragweed: currentAq.ragweed_pollen || 0
+            }
+          });
+        }
       } catch (error) {
-        console.error('Error fetching weather/air quality:', error);
+        console.error('Error fetching air quality:', error);
       }
     };
 
@@ -319,14 +341,22 @@ export function WeatherWidget() {
         </div>
         
         {weather && (
-          <div className="flex items-center gap-3 border-l border-slate-200 pl-4 relative group/weather cursor-help">
-            <div className="flex items-center gap-1.5" title={`${getWeatherLabel(weather.code)} (Ressenti ${weather.feelsLike}°C)`}>
+          <div className="flex items-center gap-3 border-l border-slate-200 pl-4 relative group/weather">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowWeatherDetails(!showWeatherDetails);
+                setShowAqiDetails(false);
+              }}
+              className="flex items-center gap-1.5 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer active:scale-95" 
+              title={`${getWeatherLabel(weather.code)} (Ressenti ${weather.feelsLike}°C)`}
+            >
               {getWeatherIcon(weather.code, weather.isDay)}
-              <div className="flex flex-col leading-none">
+              <div className="flex flex-col leading-none text-left">
                 <span className="tabular-nums font-bold">{weather.temp}°C</span>
                 <span className="text-[8px] text-slate-400 font-medium">Ressenti {weather.feelsLike}°</span>
               </div>
-            </div>
+            </button>
             <div className="flex items-center gap-1.5" title="Humidité">
               <CloudRain size={14} className="text-blue-300" />
               <span className="tabular-nums">{weather.humidity}%</span>
@@ -337,7 +367,10 @@ export function WeatherWidget() {
             </div>
 
             {/* Weather Details Tooltip */}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 opacity-0 invisible group-hover/weather:opacity-100 group-hover/weather:visible transition-all duration-300 z-50 pointer-events-none text-left">
+            <div className={clsx(
+              "absolute top-full left-1/2 -translate-x-1/2 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 transition-all duration-300 z-50 text-left",
+              showWeatherDetails ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-2 group-hover/weather:opacity-100 group-hover/weather:visible group-hover/weather:translate-y-0"
+            )}>
               <div className="mb-4 pb-3 border-b border-slate-100">
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -386,18 +419,35 @@ export function WeatherWidget() {
         )}
 
         {airQuality && (
-          <div className="relative group/details flex items-center gap-3 border-l border-slate-200 pl-4 cursor-help">
-            <div className="flex items-center gap-1.5">
+          <div className="relative group/details flex items-center gap-3 border-l border-slate-200 pl-4">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAqiDetails(!showAqiDetails);
+                setShowWeatherDetails(false);
+              }}
+              className="flex items-center gap-1.5 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer active:scale-95"
+            >
               <Wind size={14} className={getAqiColor(airQuality.aqi)} />
               <span className="hidden sm:inline">AQI {airQuality.aqi}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAqiDetails(!showAqiDetails);
+                setShowWeatherDetails(false);
+              }}
+              className="flex items-center gap-1.5 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer active:scale-95"
+            >
               <Leaf size={14} className={getPollenColor(airQuality.pollen.total)} />
               <span className="hidden sm:inline">Pollen</span>
-            </div>
+            </button>
 
             {/* Tooltip for details */}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 opacity-0 invisible group-hover/details:opacity-100 group-hover/details:visible transition-all duration-300 z-50 pointer-events-none text-left">
+            <div className={clsx(
+              "absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 transition-all duration-300 z-50 text-left",
+              showAqiDetails ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-2 group-hover/details:opacity-100 group-hover/details:visible group-hover/details:translate-y-0"
+            )}>
               <div className="mb-3 pb-2 border-b border-slate-100">
                 <div className="font-bold text-slate-800 mb-1 flex items-center gap-2">
                   <Wind size={14} className={getAqiColor(airQuality.aqi)} />

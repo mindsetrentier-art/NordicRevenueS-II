@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Delete, Palette, Check } from 'lucide-react';
+import { X, Delete, Palette, Check, Mic } from 'lucide-react';
 
 interface CalculatorProps {
   onClose: () => void;
@@ -306,6 +306,46 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [display, previousValue, operator, waitingForNewValue]);
 
+  const [isListening, setIsListening] = useState(false);
+  const [detectedAmount, setDetectedAmount] = useState<string | null>(null);
+
+  const startListening = () => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setDetectedAmount(null);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      const cleaned = transcript.replace(/\s/g, '').replace(',', '.');
+      const match = cleaned.match(/\d+(\.\d+)?/);
+      if (match) {
+        setDetectedAmount(match[0]);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
   const t = themes[theme];
 
   const getOpClass = (op: string) => {
@@ -361,8 +401,43 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
       </div>
       
       {/* Display */}
-      <div className={`p-6 text-right text-4xl font-light overflow-hidden text-ellipsis tracking-wider transition-colors duration-300 ${t.display}`}>
-        {display}
+      <div className={`relative p-6 text-right text-4xl font-light overflow-hidden text-ellipsis tracking-wider transition-colors duration-300 ${t.display}`}>
+        {detectedAmount !== null && (
+          <div className="absolute inset-0 bg-blue-600/90 backdrop-blur-sm flex items-center justify-between px-6 z-20 animate-in fade-in zoom-in duration-200">
+            <span className="text-white font-bold flex items-center gap-3 text-2xl">
+              <Mic size={24} className="text-blue-200" />
+              {detectedAmount} ?
+            </span>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setDetectedAmount(null)}
+                className="p-2 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+              >
+                <X size={24} />
+              </button>
+              <button 
+                onClick={() => {
+                  setDisplay(detectedAmount);
+                  setDetectedAmount(null);
+                  setWaitingForNewValue(false);
+                }}
+                className="p-2 rounded-full bg-white text-blue-600 hover:bg-blue-50 transition-colors shadow-lg"
+              >
+                <Check size={24} />
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={startListening}
+            className={`p-2 rounded-xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50'}`}
+            title="Dicter un montant"
+          >
+            <Mic size={20} />
+          </button>
+          <span className="truncate ml-4">{display}</span>
+        </div>
       </div>
 
       {/* Keypad */}
