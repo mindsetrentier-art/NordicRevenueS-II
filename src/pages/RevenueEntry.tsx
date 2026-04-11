@@ -178,15 +178,24 @@ export function RevenueEntry() {
         }
         
         setEstablishments(estData);
-        if (estData.length > 0) {
-          setSelectedEst(estData[0].id);
-        }
+        // Only set selectedEst if it's not already set to avoid resetting user selection on refresh
+        setEstablishments(prev => {
+          if (estData.length > 0) {
+            setSelectedEst(current => current || estData[0].id);
+          }
+          return estData;
+        });
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'establishments');
       }
     };
 
     fetchEstablishments();
+
+    // Refresh establishments every 5 minutes (300000 ms)
+    const intervalId = setInterval(fetchEstablishments, 300000);
+
+    return () => clearInterval(intervalId);
   }, [userProfile]);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -888,17 +897,17 @@ function ServiceSection({
                 ))}
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
-              <label className="cursor-pointer flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors">
-                <Camera size={16} /> Prendre une photo
+            <div className="flex flex-col sm:flex-row gap-3">
+              <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
+                <Camera size={18} className="text-blue-600" /> Prendre une photo
                 <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => {
                   if (e.target.files) {
                     setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
                   }
                 }} />
               </label>
-              <label className="cursor-pointer flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors">
-                <FileText size={16} /> Ajouter un document
+              <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
+                <FileText size={18} className="text-blue-600" /> Ajouter un document
                 <input type="file" accept="image/*,video/*,application/pdf" multiple className="hidden" onChange={(e) => {
                   if (e.target.files) {
                     setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);

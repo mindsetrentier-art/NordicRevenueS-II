@@ -107,9 +107,21 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
           )}
 
           {loading && (
-            <div className="flex items-center gap-2 text-indigo-600 text-sm py-2">
-              <Loader2 className="animate-spin" size={16} />
-              <span>Analyse de vos données en cours...</span>
+            <div className="space-y-3 py-2">
+              <div className="flex items-center gap-3 text-indigo-600">
+                <div className="relative flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500 flex items-center justify-center">
+                    <Sparkles size={10} className="text-white animate-pulse" />
+                  </span>
+                </div>
+                <span className="text-sm font-medium animate-pulse">L'IA de Gemini analyse vos données...</span>
+              </div>
+              <div className="space-y-2 opacity-60">
+                <div className="h-3 bg-indigo-200/50 rounded-full animate-pulse w-full"></div>
+                <div className="h-3 bg-indigo-200/50 rounded-full animate-pulse w-5/6"></div>
+                <div className="h-3 bg-indigo-200/50 rounded-full animate-pulse w-4/6"></div>
+              </div>
             </div>
           )}
 

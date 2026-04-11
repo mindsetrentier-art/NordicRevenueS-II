@@ -23,9 +23,9 @@ export function NewsTicker() {
   });
   const [isAutoPlay, setIsAutoPlay] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [language, setLanguage] = useState<'fr' | 'zh'>(() => {
+  const [language, setLanguage] = useState<'fr' | 'zh' | 'en'>(() => {
     const saved = localStorage.getItem('newsLanguage');
-    return (saved === 'fr' || saved === 'zh') ? saved : 'fr';
+    return (saved === 'fr' || saved === 'zh' || saved === 'en') ? saved : 'fr';
   });
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +37,7 @@ export function NewsTicker() {
     localStorage.setItem('newsLanguage', language);
   }, [language]);
 
-  const fetchNews = async (lang: 'fr' | 'zh' = language) => {
+  const fetchNews = async (lang: 'fr' | 'zh' | 'en' = language) => {
     setLoading(true);
     try {
       const apiKey = process.env.GEMINI_API_KEY;
@@ -46,7 +46,7 @@ export function NewsTicker() {
       const ai = new GoogleGenAI({ apiKey });
       
       const now = new Date();
-      const dateStr = now.toLocaleString(lang === 'fr' ? 'fr-FR' : 'zh-CN', { 
+      const dateStr = now.toLocaleString(lang === 'fr' ? 'fr-FR' : lang === 'zh' ? 'zh-CN' : 'en-US', { 
         weekday: 'long', 
         year: 'numeric', 
         month: 'long', 
@@ -55,8 +55,9 @@ export function NewsTicker() {
         minute: '2-digit'
       });
 
-      const prompt = lang === 'fr' 
-        ? `
+      let prompt = '';
+      if (lang === 'fr') {
+        prompt = `
           Génère 8 actualités mondiales importantes et réalistes pour la date du ${dateStr}.
           Sujets : Économie, Géopolitique, Tendances technologiques, Nouveautés mondiales.
           Sources : Reuters, BFM TV, Bloomberg, Financial Times, Le Monde, CNN.
@@ -65,8 +66,9 @@ export function NewsTicker() {
           [
             { "title": "Titre court et percutant", "category": "Économie", "source": "Reuters", "time": "09:42", "date": "09/04/2026" }
           ]
-        `
-        : `
+        `;
+      } else if (lang === 'zh') {
+        prompt = `
           Generate 8 important and realistic global news items in Chinese (Mandarin) for the date ${dateStr}.
           Topics: Economy, Geopolitics, Tech Trends, Global News.
           Sources: Xinhua, CCTV, South China Morning Post, Phoenix TV, Caixin, Reuters China.
@@ -76,6 +78,18 @@ export function NewsTicker() {
             { "title": "Short and impactful title in Chinese", "category": "Category in Chinese", "source": "Source name", "time": "09:42", "date": "09/04/2026" }
           ]
         `;
+      } else {
+        prompt = `
+          Generate 8 important and realistic global news items in English for the date ${dateStr}.
+          Topics: Economy, Geopolitics, Tech Trends, Global News.
+          Sources: Reuters, BBC, CNN, Bloomberg, Financial Times, AP.
+          For each item, invent a precise time (e.g., "09:42") and today's date.
+          Strict JSON format:
+          [
+            { "title": "Short and impactful title", "category": "Economy", "source": "Reuters", "time": "09:42", "date": "09/04/2026" }
+          ]
+        `;
+      }
 
       const response = await (ai as any).models.generateContent({
         model: "gemini-2.0-flash",
@@ -96,10 +110,34 @@ export function NewsTicker() {
       
       // Fallback news
       setNews([
-        { title: lang === 'fr' ? "Marchés mondiaux en hausse après les annonces de la Fed" : "美联储发布公告后全球市场上涨", category: lang === 'fr' ? "Économie" : "经济", source: lang === 'fr' ? "Reuters" : "路透社", time: "10:45", date: new Date().toLocaleDateString() },
-        { title: lang === 'fr' ? "Nouveau sommet diplomatique pour la paix en Europe" : "欧洲和平新外交峰会召开", category: lang === 'fr' ? "Géopolitique" : "地缘政治", source: lang === 'fr' ? "BFM TV" : "新华社", time: "11:02", date: new Date().toLocaleDateString() },
-        { title: lang === 'fr' ? "Lancement réussi de la nouvelle mission spatiale" : "新太空任务成功发射", category: lang === 'fr' ? "Science" : "科技", source: lang === 'fr' ? "Bloomberg" : "彭博社", time: "11:15", date: new Date().toLocaleDateString() },
-        { title: lang === 'fr' ? "Avancée majeure dans le développement de l'IA quantique" : "量子人工智能发展取得重大突破", category: lang === 'fr' ? "Technologie" : "技术", source: lang === 'fr' ? "Le Monde" : "央视新闻", time: "12:30", date: new Date().toLocaleDateString() }
+        { 
+          title: lang === 'fr' ? "Marchés mondiaux en hausse après les annonces de la Fed" : lang === 'zh' ? "美联储发布公告后全球市场上涨" : "Global markets rise after Fed announcements", 
+          category: lang === 'fr' ? "Économie" : lang === 'zh' ? "经济" : "Economy", 
+          source: lang === 'fr' ? "Reuters" : lang === 'zh' ? "路透社" : "Reuters", 
+          time: "10:45", 
+          date: new Date().toLocaleDateString() 
+        },
+        { 
+          title: lang === 'fr' ? "Nouveau sommet diplomatique pour la paix en Europe" : lang === 'zh' ? "欧洲和平新外交峰会召开" : "New diplomatic summit for peace in Europe", 
+          category: lang === 'fr' ? "Géopolitique" : lang === 'zh' ? "地缘政治" : "Geopolitics", 
+          source: lang === 'fr' ? "BFM TV" : lang === 'zh' ? "新华社" : "BBC", 
+          time: "11:02", 
+          date: new Date().toLocaleDateString() 
+        },
+        { 
+          title: lang === 'fr' ? "Lancement réussi de la nouvelle mission spatiale" : lang === 'zh' ? "新太空任务成功发射" : "Successful launch of the new space mission", 
+          category: lang === 'fr' ? "Science" : lang === 'zh' ? "科技" : "Science", 
+          source: lang === 'fr' ? "Bloomberg" : lang === 'zh' ? "彭博社" : "Bloomberg", 
+          time: "11:15", 
+          date: new Date().toLocaleDateString() 
+        },
+        { 
+          title: lang === 'fr' ? "Avancée majeure dans le développement de l'IA quantique" : lang === 'zh' ? "量子人工智能发展取得重大突破" : "Major breakthrough in quantum AI development", 
+          category: lang === 'fr' ? "Technologie" : lang === 'zh' ? "技术" : "Technology", 
+          source: lang === 'fr' ? "Le Monde" : lang === 'zh' ? "央视新闻" : "TechCrunch", 
+          time: "12:30", 
+          date: new Date().toLocaleDateString() 
+        }
       ]);
     } finally {
       setLoading(false);
@@ -259,20 +297,19 @@ export function NewsTicker() {
         </button>
       </div>
 
-      {/* Language Selector */}
-      <div className="flex items-center gap-1 px-3 border-l border-white/5 text-[9px] font-mono text-white/30 z-30">
+      {/* Language Selector (Compact) */}
+      <div className="flex items-center px-2 sm:px-3 border-l border-white/5 z-30">
         <button 
-          onClick={() => { setLanguage('fr'); fetchNews('fr'); }}
-          className={clsx("hover:text-white transition-colors", language === 'fr' ? "text-blue-400 font-bold" : "text-white/30")}
+          onClick={() => {
+            const nextLang = language === 'fr' ? 'en' : language === 'en' ? 'zh' : 'fr';
+            setLanguage(nextLang);
+            fetchNews(nextLang);
+          }}
+          className="flex items-center gap-1 p-1.5 rounded-lg text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 transition-colors uppercase"
+          title="Changer de langue"
         >
-          FR
-        </button>
-        <span className="opacity-20">/</span>
-        <button 
-          onClick={() => { setLanguage('zh'); fetchNews('zh'); }}
-          className={clsx("hover:text-white transition-colors", language === 'zh' ? "text-blue-400 font-bold" : "text-white/30")}
-        >
-          ZH
+          <Globe size={12} className="opacity-70 hidden sm:block" />
+          {language}
         </button>
       </div>
 
@@ -295,7 +332,7 @@ export function NewsTicker() {
       {/* Expand Button */}
       <button 
         onClick={() => setIsExpanded(true)}
-        className="absolute right-0 top-0 bottom-0 px-5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all flex items-center gap-2 z-30 border-l border-white/5 backdrop-blur-md group/btn"
+        className="h-full px-3 sm:px-5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all flex items-center gap-2 z-30 border-l border-white/5 backdrop-blur-md group/btn shrink-0"
       >
         <TrendingUp size={12} className="group-hover/btn:scale-110 transition-transform" />
         <span className="text-[9px] font-black uppercase tracking-[0.15em] hidden sm:inline">Flux</span>
@@ -381,16 +418,22 @@ export function NewsTicker() {
                   />
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                  <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200 overflow-x-auto">
                     <button 
                       onClick={() => { setLanguage('fr'); fetchNews('fr'); }}
-                      className={clsx("px-2 py-1 rounded-md text-[10px] font-bold transition-all", language === 'fr' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
+                      className={clsx("px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap", language === 'fr' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
                     >
                       Français
                     </button>
                     <button 
+                      onClick={() => { setLanguage('en'); fetchNews('en'); }}
+                      className={clsx("px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap", language === 'en' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
+                    >
+                      English
+                    </button>
+                    <button 
                       onClick={() => { setLanguage('zh'); fetchNews('zh'); }}
-                      className={clsx("px-2 py-1 rounded-md text-[10px] font-bold transition-all", language === 'zh' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
+                      className={clsx("px-2 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap", language === 'zh' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
                     >
                       中文
                     </button>

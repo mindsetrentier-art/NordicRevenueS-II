@@ -52,15 +52,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const randomColor = THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
-      setThemeColor(randomColor);
-    }, 2 * 60 * 1000); // 2 minutes
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     localStorage.setItem('app_theme_color', themeColor);
     document.documentElement.style.setProperty('--theme-color', themeColor);
     document.documentElement.style.setProperty('--theme-color-light', `${themeColor}22`);
