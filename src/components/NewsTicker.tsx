@@ -183,18 +183,24 @@ export function NewsTicker() {
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_2px,3px_100%] z-20 opacity-20" />
       
       {/* Label "LIVE" */}
-      <div className="absolute left-0 top-0 bottom-0 px-4 bg-red-600/90 flex items-center gap-2 z-30 shadow-[4px_0_20px_rgba(220,38,38,0.4)] skew-x-[-12deg] -ml-2 pl-6">
-        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-[0_0_8px_white]" />
-        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white skew-x-[12deg]">Direct</span>
+      <div className="absolute left-0 top-0 bottom-0 px-3 sm:px-4 bg-red-600/90 flex items-center gap-2 z-30 shadow-[4px_0_20px_rgba(220,38,38,0.4)] skew-x-[-12deg] -ml-2 pl-4 sm:pl-6">
+        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-[0_0_8px_white] skew-x-[12deg]" />
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white skew-x-[12deg] hidden sm:inline">Direct</span>
       </div>
 
       {/* Scrolling Container */}
       <div 
-        className="flex-1 flex items-center overflow-hidden whitespace-nowrap group relative"
+        className="flex-1 flex items-center overflow-hidden whitespace-nowrap group relative ml-8 sm:ml-24"
         onMouseEnter={() => {
           if (isAutoPlay && scrollRef.current) scrollRef.current.style.animationPlayState = 'paused';
         }}
         onMouseLeave={() => {
+          if (isAutoPlay && scrollRef.current) scrollRef.current.style.animationPlayState = 'running';
+        }}
+        onTouchStart={() => {
+          if (isAutoPlay && scrollRef.current) scrollRef.current.style.animationPlayState = 'paused';
+        }}
+        onTouchEnd={() => {
           if (isAutoPlay && scrollRef.current) scrollRef.current.style.animationPlayState = 'running';
         }}
       >
@@ -247,10 +253,10 @@ export function NewsTicker() {
                   <span className="text-[9px] font-bold text-blue-400 uppercase tracking-wider bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded-sm font-mono">
                     {news[currentIndex].category}
                   </span>
-                  <p className="text-white/90 text-xs font-medium tracking-tight">
+                  <p className="text-white/90 text-xs font-medium tracking-tight truncate max-w-[150px] sm:max-w-none">
                     {news[currentIndex].title}
                   </p>
-                  <div className="flex items-center gap-2 text-[9px] font-mono text-white/30">
+                  <div className="items-center gap-2 text-[9px] font-mono text-white/30 hidden sm:flex">
                     <span className="font-bold text-white/50">{news[currentIndex].source}</span>
                     <span className="opacity-50">/</span>
                     <span className="text-blue-400/60">{news[currentIndex].time}</span>
@@ -260,18 +266,18 @@ export function NewsTicker() {
             </AnimatePresence>
             
             {/* Manual Navigation Arrows */}
-            <div className="absolute inset-y-0 left-0 flex items-center pl-2">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-1 sm:pl-2 z-40 bg-gradient-to-r from-black/80 to-transparent pr-4">
               <button 
                 onClick={prevNews}
-                className="p-1 hover:bg-white/10 rounded-full text-white/30 hover:text-white transition-colors"
+                className="p-1 hover:bg-white/10 rounded-full text-white/50 hover:text-white transition-colors backdrop-blur-sm"
               >
                 <ChevronLeft size={16} />
               </button>
             </div>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+            <div className="absolute inset-y-0 right-0 flex items-center pr-1 sm:pr-2 z-40 bg-gradient-to-l from-black/80 to-transparent pl-4">
               <button 
                 onClick={nextNews}
-                className="p-1 hover:bg-white/10 rounded-full text-white/30 hover:text-white transition-colors"
+                className="p-1 hover:bg-white/10 rounded-full text-white/50 hover:text-white transition-colors backdrop-blur-sm"
               >
                 <ChevronRight size={16} />
               </button>

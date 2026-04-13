@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage, Language } from '../contexts/LanguageContext';
 import { User, Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, Globe } from 'lucide-react';
 import clsx from 'clsx';
 
 export function Settings() {
   const { userProfile, updateUserProfile } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,8 +206,8 @@ export function Settings() {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Paramètres</h1>
-        <p className="text-slate-500 text-sm mt-1">Gérez votre profil et les accès de votre équipe.</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t('settings.title')}</h1>
+        <p className="text-slate-500 text-sm mt-1">{t('settings.subtitle')}</p>
       </div>
 
       {/* Tabs */}
@@ -219,7 +221,7 @@ export function Settings() {
               : "border-transparent text-slate-500 hover:text-slate-700"
           )}
         >
-          Mon Profil
+          {t('settings.profile')}
         </button>
         {userProfile?.role === 'admin' && (
           <button
@@ -231,7 +233,7 @@ export function Settings() {
                 : "border-transparent text-slate-500 hover:text-slate-700"
             )}
           >
-            Utilisateurs & Accès
+            {t('settings.users')}
           </button>
         )}
       </div>
@@ -247,7 +249,7 @@ export function Settings() {
               {isEditingProfile ? (
                 <form onSubmit={handleUpdateProfile} className="flex flex-col gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nom d'affichage</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{t('settings.edit_name')}</label>
                     <input
                       type="text"
                       value={editDisplayName}
@@ -263,7 +265,7 @@ export function Settings() {
                       disabled={isSavingProfile}
                       className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                     >
-                      {isSavingProfile ? 'Enregistrement...' : 'Enregistrer'}
+                      {isSavingProfile ? '...' : t('settings.save')}
                     </button>
                     <button
                       type="button"
@@ -273,7 +275,7 @@ export function Settings() {
                       }}
                       className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
                     >
-                      Annuler
+                      {t('settings.cancel')}
                     </button>
                   </div>
                 </form>
@@ -288,23 +290,47 @@ export function Settings() {
                       }}
                       className="text-sm font-semibold text-blue-600 hover:text-blue-700"
                     >
-                      Modifier
+                      {t('settings.edit')}
                     </button>
                   </div>
                   <p className="text-slate-500">{userProfile?.email}</p>
                   <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                     <Shield size={14} />
-                    {userProfile?.role === 'admin' ? 'Administrateur' : 'Manager'}
+                    {userProfile?.role === 'admin' ? t('settings.admin') : t('settings.manager')}
                   </div>
                 </>
               )}
             </div>
           </div>
           
-          <div className="space-y-6">
-            <div>
+          <div className="space-y-8">
+            {/* Language Selector */}
+            <div className="pt-6 border-t border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Globe size={16} className="text-slate-400" /> {t('settings.language')}
+              </h3>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {(['fr', 'en', 'zh'] as Language[]).map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => setLanguage(lang)}
+                    className={clsx(
+                      "flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-left",
+                      language === lang 
+                        ? "border-blue-600 bg-blue-50 text-blue-900" 
+                        : "border-slate-200 hover:border-slate-300 bg-white text-slate-700"
+                    )}
+                  >
+                    <span className="font-semibold">{t(`settings.language.${lang}`)}</span>
+                    {language === lang && <Check size={18} className="text-blue-600 ml-3" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-slate-100">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Building2 size={16} className="text-slate-400" /> Mes Établissements
+                <Building2 size={16} className="text-slate-400" /> {t('settings.my_establishments')}
               </h3>
               {userProfile?.role === 'admin' ? (
                 <p className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">

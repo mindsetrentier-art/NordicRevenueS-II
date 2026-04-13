@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { ThemePicker } from './ThemePicker';
 import { 
   LayoutDashboard, 
@@ -10,7 +11,8 @@ import {
   BarChart3, 
   Settings, 
   Bell,
-  LogOut
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Logo } from './Logo';
@@ -25,6 +27,7 @@ import { NewsTicker } from './NewsTicker';
 export function Layout() {
   const { userProfile, logout } = useAuth();
   const { themeColor } = useTheme();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -33,12 +36,13 @@ export function Layout() {
   };
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: 'Tableau de bord' },
-    { to: '/entry', icon: Receipt, label: 'Saisie Recettes' },
-    { to: '/reports', icon: BarChart3, label: 'Rapports' },
-    { to: '/establishments', icon: Store, label: 'Établissements' },
-    { to: '/alerts', icon: Bell, label: 'Alertes' },
-    { to: '/settings', icon: Settings, label: 'Paramètres' },
+    { to: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { to: '/entry', icon: Receipt, label: t('nav.entry') },
+    { to: '/reports', icon: BarChart3, label: t('nav.reports') },
+    { to: '/establishments', icon: Store, label: t('nav.establishments') },
+    { to: '/alerts', icon: Bell, label: t('nav.alerts') },
+    { to: '/reviews', icon: MessageSquare, label: t('nav.reviews') },
+    { to: '/settings', icon: Settings, label: t('nav.settings') },
   ];
 
   return (
@@ -58,16 +62,16 @@ export function Layout() {
         <QuizSidebar />
         
         {/* Mobile Header */}
-      <header className="lg:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center gap-2">
-          <Logo className="w-8 h-8 rounded-lg shadow-sm" />
-          <h1 className="font-bold text-lg tracking-tight">NordicRevenueS</h1>
+      <header className="lg:hidden bg-white/95 backdrop-blur-md border-b border-slate-200 p-3 sm:p-4 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Logo className="w-8 h-8 rounded-lg shadow-sm shrink-0" />
+          <h1 className="font-bold text-base sm:text-lg tracking-tight truncate max-w-[140px] sm:max-w-none">NordicRevenueS</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <ThemePicker />
           <button 
             onClick={handleLogout} 
-            className="p-2 text-slate-600 hover:text-red-600 transition-colors"
+            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
             title="Déconnexion"
           >
             <LogOut size={20} />
@@ -124,7 +128,7 @@ export function Layout() {
             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
           >
             <LogOut size={20} />
-            Déconnexion
+            {t('nav.logout')}
           </button>
         </div>
       </aside>
@@ -139,20 +143,24 @@ export function Layout() {
       </main>
 
       {/* Bottom Navigation (Mobile only) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-transparent px-2 py-1 z-40 flex items-center justify-around">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-transparent px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-50 flex items-center overflow-x-auto flex-nowrap gap-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300/80 [&::-webkit-scrollbar-thumb]:rounded-full">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) => clsx(
-              "flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors min-w-[60px]",
+              "flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all shrink-0 min-w-[4.5rem]",
               isActive 
                 ? "text-blue-600" 
                 : "text-slate-500 hover:text-slate-900"
             )}
           >
-            <item.icon size={20} className={clsx("transition-transform", "active:scale-90")} />
-            <span className="text-[10px] font-medium truncate w-full text-center">{item.label.split(' ')[0]}</span>
+            {({ isActive }) => (
+              <>
+                <item.icon size={22} className={clsx("transition-transform", "active:scale-90", isActive && "stroke-[2.5px]")} />
+                <span className="text-[10px] font-semibold truncate w-full text-center">{item.label.split(' ')[0]}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>

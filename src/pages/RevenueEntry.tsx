@@ -26,7 +26,9 @@ import {
   Camera,
   FileText,
   AlertCircle,
-  MapPin
+  MapPin,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Calculator } from '../components/Calculator';
@@ -451,6 +453,7 @@ export function RevenueEntry() {
             onToggleMethod={handleToggleMethod}
             total={totalMidi}
             isActive={isMidiActive}
+            setDate={setDate}
             onToggleActive={() => {
               setIsMidiActive(!isMidiActive);
               if (isMidiActive) {
@@ -477,6 +480,7 @@ export function RevenueEntry() {
             onToggleMethod={handleToggleMethod}
             total={totalSoir}
             isActive={isSoirActive}
+            setDate={setDate}
             onToggleActive={() => {
               setIsSoirActive(!isSoirActive);
               if (isSoirActive) {
@@ -567,7 +571,8 @@ function ServiceSection({
   onToggleMethod,
   total,
   isActive,
-  onToggleActive
+  onToggleActive,
+  setDate
 }: {
   title: string;
   icon: React.ReactNode;
@@ -584,9 +589,87 @@ function ServiceSection({
   total: number;
   isActive: boolean;
   onToggleActive: () => void;
+  setDate?: React.Dispatch<React.SetStateAction<string>>;
 }) {
   const [isListeningNotes, setIsListeningNotes] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const recognitionRef = useRef<any>(null);
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files) return;
+    const fileArray = Array.from(files);
+    setAttachments(prev => [...prev, ...fileArray]);
+
+    const imageFile = fileArray.find(f => f.type.startsWith('image/'));
+    if (imageFile) {
+      setIsExtracting(true);
+      try {
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          console.warn("Gemini API key missing for Vision extraction");
+          return;
+        }
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey });
+
+        const reader = new FileReader();
+        reader.readAsDataURL(imageFile);
+        await new Promise(resolve => reader.onload = resolve);
+        const base64Data = (reader.result as string).split(',')[1];
+
+        const prompt = `
+          Tu es un assistant comptable expert. Analyse ce reçu/facture.
+          Extrais les informations suivantes au format JSON strict :
+          - "total": le montant total TTC (nombre flottant, ex: 120.50)
+          - "vat": le montant de la TVA (nombre flottant, 0 si non trouvé)
+          - "date": la date du reçu au format YYYY-MM-DD (chaîne vide si non trouvée)
+          - "method": la méthode de paiement probable ("cb", "cash", "tr", ou null)
+          
+          Ne renvoie QUE le JSON, sans aucun markdown ni texte autour.
+        `;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            prompt,
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: imageFile.type
+              }
+            }
+          ]
+        });
+
+        const text = response.text || '';
+        const jsonMatch = text.match(/\{.*\}/s);
+        if (jsonMatch) {
+          const data = JSON.parse(jsonMatch[0]);
+          
+          let notesAddition = `[IA] Reçu scanné : Total ${data.total}€`;
+          if (data.vat) notesAddition += ` (dont TVA ${data.vat}€)`;
+          
+          setNotes(prev => prev ? `${prev}\n${notesAddition}` : notesAddition);
+
+          if (data.date && setDate) {
+            setDate(data.date);
+          }
+
+          if (data.total && data.total > 0) {
+            const method = data.method && activeMethods[data.method as keyof Payments] ? data.method : 'cb';
+            // Only overwrite if current total is 0 to avoid deleting user data
+            if (total === 0) {
+               setPayments(prev => ({ ...prev, [method]: data.total }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erreur d'extraction IA:", err);
+      } finally {
+        setIsExtracting(false);
+      }
+    }
+  };
 
   const toggleListeningNotes = () => {
     if (!isActive) return;
@@ -885,6 +968,13 @@ function ServiceSection({
             <Paperclip className="text-slate-500" size={16} /> Pièces jointes
           </h3>
           <div className="flex flex-col gap-3">
+            {isExtracting && (
+              <div className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl border border-blue-100 animate-pulse">
+                <Loader2 className="animate-spin" size={18} />
+                <Sparkles size={18} className="text-blue-500" />
+                <span className="text-sm font-semibold">L'IA Gemini analyse votre reçu...</span>
+              </div>
+            )}
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {attachments.map((file, idx) => (
@@ -900,19 +990,11 @@ function ServiceSection({
             <div className="flex flex-col sm:flex-row gap-3">
               <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
                 <Camera size={18} className="text-blue-600" /> Prendre une photo
-                <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => {
-                  if (e.target.files) {
-                    setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
-                  }
-                }} />
+                <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
               </label>
               <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
                 <FileText size={18} className="text-blue-600" /> Ajouter un document
-                <input type="file" accept="image/*,video/*,application/pdf" multiple className="hidden" onChange={(e) => {
-                  if (e.target.files) {
-                    setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
-                  }
-                }} />
+                <input type="file" accept="image/*,video/*,application/pdf" multiple className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
               </label>
             </div>
           </div>

@@ -39,6 +39,7 @@ import { fr } from 'date-fns/locale';
 import clsx from 'clsx';
 import { AIInsights } from '../components/AIInsights';
 import { SearchableSelect } from '../components/SearchableSelect';
+import { StaffLeaderboard } from '../components/StaffLeaderboard';
 
 const TrendBadge = ({ value, isPercentagePoint = false }: { value: number | null, isPercentagePoint?: boolean }) => {
   if (value === null) {
@@ -666,32 +667,37 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-6">Moyens de Paiement</h2>
-          <div className="space-y-6">
-            {[
-              { label: 'Carte Bancaire', value: paymentBreakdown.cb, color: 'bg-blue-600' },
-              { label: 'Tickets Resto', value: paymentBreakdown.tr, color: 'bg-amber-500' },
-              { label: 'Espèces', value: paymentBreakdown.cash, color: 'bg-emerald-500' },
-              { label: 'AMEX', value: paymentBreakdown.amex, color: 'bg-purple-500' },
-              { label: 'Virement', value: paymentBreakdown.transfer, color: 'bg-slate-400' },
-            ].map((item) => {
-              const percentage = totalPayments > 0 ? Math.round((item.value / totalPayments) * 100) : 0;
-              return (
-                <div key={item.label}>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-slate-600 font-medium">{item.label}</span>
-                    <span className="font-bold text-slate-900">{percentage}%</span>
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900 mb-6">Moyens de Paiement</h2>
+            <div className="space-y-6">
+              {[
+                { label: 'Carte Bancaire', value: paymentBreakdown.cb, color: 'bg-blue-600' },
+                { label: 'Tickets Resto', value: paymentBreakdown.tr, color: 'bg-amber-500' },
+                { label: 'Espèces', value: paymentBreakdown.cash, color: 'bg-emerald-500' },
+                { label: 'AMEX', value: paymentBreakdown.amex, color: 'bg-purple-500' },
+                { label: 'Virement', value: paymentBreakdown.transfer, color: 'bg-slate-400' },
+              ].map((item) => {
+                const percentage = totalPayments > 0 ? Math.round((item.value / totalPayments) * 100) : 0;
+                return (
+                  <div key={item.label}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-slate-600 font-medium">{item.label}</span>
+                      <span className="font-bold text-slate-900">{percentage}%</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={clsx("h-full rounded-full", item.color)} style={{ width: `${percentage}%` }}></div>
+                    </div>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className={clsx("h-full rounded-full", item.color)} style={{ width: `${percentage}%` }}></div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Staff Leaderboard */}
+      <StaffLeaderboard />
 
       {/* Footer Legal & Support */}
       <div className="mt-12 border-t border-slate-200 pt-8 pb-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">

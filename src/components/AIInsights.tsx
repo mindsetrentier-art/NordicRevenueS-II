@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, CloudRain } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
@@ -10,6 +10,30 @@ interface AIInsightsProps {
   paymentData: any;
   periodLabel: string;
 }
+
+const getGeolocation = (): Promise<{lat: number, lon: number}> => {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({ lat: 48.8566, lon: 2.3522 }); // Default Paris
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve({ lat: 48.8566, lon: 2.3522 }) // Default Paris on error/deny
+    );
+  });
+};
+
+const fetchWeatherForecast = async (lat: number, lon: number) => {
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`);
+    const data = await res.json();
+    return data.daily;
+  } catch (e) {
+    console.error("Weather fetch failed", e);
+    return null;
+  }
+};
 
 export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsightsProps) {
   const [insights, setInsights] = useState<string | null>(() => {
@@ -52,16 +76,33 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
     setError(null);
 
     try {
+      const coords = await getGeolocation();
+      const weatherForecast = await fetchWeatherForecast(coords.lat, coords.lon);
+      
+      let weatherContext = "";
+      if (weatherForecast) {
+        weatherContext = `
+        Prévisions météo pour les 7 prochains jours (températures min/max, précipitations en mm) :
+        ${JSON.stringify({
+          dates: weatherForecast.time,
+          max_temp: weatherForecast.temperature_2m_max,
+          min_temp: weatherForecast.temperature_2m_min,
+          precipitation: weatherForecast.precipitation_sum
+        })}
+        `;
+      }
+
       const prompt = `
         Tu es un analyste financier expert pour la restauration et le commerce de détail.
         Voici les données de chiffre d'affaires (CA) pour la période : ${periodLabel}.
         
         Évolution quotidienne du CA : ${JSON.stringify(revenueData)}
         Répartition des paiements : ${JSON.stringify(paymentData)}
+        ${weatherContext}
         
         Rédige une analyse très concise (3 ou 4 phrases courtes) en français pour le gérant.
-        1. Identifie la tendance principale (hausse, baisse, jours forts).
-        2. Commente la répartition des paiements (ex: forte utilisation des Tickets Resto ou CB).
+        1. Identifie la tendance principale du CA (hausse, baisse, jours forts).
+        2. S'il y a des prévisions météo, fais une prédiction ou donne un conseil basé sur la météo à venir et l'historique (ex: "Pluie prévue ce week-end, prévoyez plus de livraisons").
         3. Donne un conseil d'action rapide.
         
         Ne fais pas d'introduction, va droit au but. Utilise un ton professionnel et encourageant.

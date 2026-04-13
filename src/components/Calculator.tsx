@@ -163,6 +163,8 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   const [previousValue, setPreviousValue] = useState<number | null>(null);
   const [operator, setOperator] = useState<string | null>(null);
   const [waitingForNewValue, setWaitingForNewValue] = useState(false);
+  const [history, setHistory] = useState<{equation: string, result: string}[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
   const [position, setPosition] = useState({ x: window.innerWidth - 450, y: window.innerHeight - 550 });
   const [isDragging, setIsDragging] = useState(false);
   const [theme, setTheme] = useState<Theme>('light');
@@ -178,7 +180,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   ];
 
   useEffect(() => {
-    if (initialValue !== undefined) {
+    if (initialValue !== undefined && !isDirty) {
       setDisplay(initialValue);
       setWaitingForNewValue(false);
       setPreviousValue(null);
@@ -235,6 +237,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const inputDigit = (digit: string) => {
+    setIsDirty(true);
     if (waitingForNewValue) {
       setDisplay(digit);
       setWaitingForNewValue(false);
@@ -244,6 +247,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const inputDecimal = () => {
+    setIsDirty(true);
     if (waitingForNewValue) {
       setDisplay('0.');
       setWaitingForNewValue(false);
@@ -255,6 +259,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const clear = () => {
+    setIsDirty(true);
     setDisplay('0');
     setPreviousValue(null);
     setOperator(null);
@@ -262,11 +267,13 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const backspace = () => {
+    setIsDirty(true);
     if (waitingForNewValue) return;
     setDisplay(display.length > 1 ? display.slice(0, -1) : '0');
   };
 
   const performOperation = (nextOperator: string) => {
+    setIsDirty(true);
     const inputValue = parseFloat(display);
 
     if (previousValue == null) {
@@ -282,6 +289,14 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
 
       setPreviousValue(newValue);
       setDisplay(String(newValue));
+
+      if (['+', '-', '*', '/'].includes(operator)) {
+        const opSymbol = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
+        setHistory(prev => [
+          { equation: `${currentValue} ${opSymbol} ${inputValue}`, result: String(newValue) },
+          ...prev
+        ].slice(0, 5));
+      }
     }
 
     setWaitingForNewValue(true);
@@ -440,6 +455,29 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
         </div>
       </div>
 
+      {/* History */}
+      {history.length > 0 && (
+        <div className={`px-4 py-2 text-sm flex flex-col gap-1 overflow-y-auto max-h-24 border-b transition-colors duration-300 ${t.header}`}>
+          {history.map((item, idx) => (
+            <button 
+              key={idx}
+              onClick={() => {
+                setDisplay(item.result);
+                setWaitingForNewValue(true);
+                setPreviousValue(parseFloat(item.result));
+                setOperator(null);
+                setIsDirty(true);
+              }}
+              className="text-right hover:opacity-70 transition-opacity flex justify-between items-center py-1"
+              title="Rappeler ce calcul"
+            >
+              <span className="opacity-50 text-xs">{item.equation} =</span>
+              <span className="font-bold">{item.result}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Keypad */}
       <div className={`grid grid-cols-4 gap-2 p-4 transition-colors duration-300 ${t.keypad}`}>
         <button onClick={clear} className={`col-span-2 p-4 text-lg font-semibold rounded-2xl transition-all active:scale-95 ${t.btnDanger}`}>C</button>
@@ -467,10 +505,13 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
 
         {activePaymentType && (
           <button 
-            onClick={() => onApply?.(parseFloat(display))}
+            onClick={() => {
+              onApply?.(parseFloat(display));
+              setIsDirty(false);
+            }}
             className={`col-span-4 mt-2 p-4 text-lg font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${t.btnEquals}`}
           >
-            <Check size={20} /> Appliquer au champ
+            <Check size={20} /> Appliquer à {paymentMethods.find(m => m.id === activePaymentType)?.label || 'ce champ'}
           </button>
         )}
       </div>
