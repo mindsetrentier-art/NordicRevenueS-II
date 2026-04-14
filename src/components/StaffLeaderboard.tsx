@@ -25,14 +25,15 @@ const mockStaffData = [
     badges: ['customer_favorite']
   },
   {
-    id: '3',
-    name: 'Julie Leroy',
-    role: 'Serveuse',
-    score: 790,
-    upsellRate: 15,
-    accuracy: 99,
-    satisfaction: 4.7,
-    badges: []
+    id: '4',
+    name: 'Harry',
+    role: 'Barman',
+    score: 720,
+    upsellRate: 12,
+    accuracy: 97,
+    satisfaction: 4.6,
+    badges: [],
+    isBlonde: true
   }
 ];
 
@@ -91,22 +92,22 @@ const BadgeIcon = ({ type }: { type: string }) => {
 
 export function StaffLeaderboard() {
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Trophy className="text-amber-500" size={20} />
+          <h2 className="text-xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
+            <Trophy className="text-amber-500" size={24} />
             Classement de l'Équipe
           </h2>
-          <p className="text-sm text-slate-500 mt-1">Performances et gamification du mois</p>
+          <p className="text-xs text-slate-500 font-medium mt-1">Performances et gamification du mois</p>
         </div>
-        <div className="bg-amber-50 text-amber-700 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border border-amber-100">
-          <Award size={14} />
+        <div className="bg-amber-50 text-amber-700 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 border border-amber-100 shadow-sm self-start sm:self-auto">
+          <Award size={16} />
           Saison en cours
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4">
         {mockStaffData.sort((a, b) => b.score - a.score).map((staff, index) => (
           <motion.div 
             key={staff.id}
@@ -114,54 +115,60 @@ export function StaffLeaderboard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
             className={clsx(
-              "flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all hover:shadow-md gap-4 sm:gap-0",
-              index === 0 ? "bg-gradient-to-r from-amber-50 to-white border-amber-200" : 
-              index === 1 ? "bg-gradient-to-r from-slate-50 to-white border-slate-200" :
+              "flex flex-col lg:flex-row lg:items-center justify-between p-6 rounded-[2rem] border transition-all hover:shadow-lg group gap-6",
+              index === 0 ? "bg-gradient-to-br from-amber-50/50 via-white to-white border-amber-200 shadow-amber-500/5" : 
+              index === 1 ? "bg-gradient-to-br from-slate-50/50 via-white to-white border-slate-200 shadow-slate-500/5" :
               "bg-white border-slate-100"
             )}
           >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
               <div className={clsx(
-                "w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-lg shadow-sm",
+                "w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center font-black text-2xl shadow-sm transition-transform group-hover:scale-110",
+                staff.name === 'Harry' ? "bg-[#FBF2C0] text-[#D4AF37] border-2 border-[#F3E5AB]" :
                 index === 0 ? "bg-amber-100 text-amber-600" :
                 index === 1 ? "bg-slate-200 text-slate-600" :
                 "bg-orange-100 text-orange-600"
               )}>
-                {index === 0 ? <Trophy size={20} /> : index === 1 ? <Medal size={20} /> : `#${index + 1}`}
+                {staff.name === 'Harry' ? "H" : index === 0 ? <Trophy size={28} /> : index === 1 ? <Medal size={28} /> : `#${index + 1}`}
               </div>
               
               <div>
-                <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                  {staff.name}
-                  <div className="flex gap-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className={clsx(
+                    "font-black text-lg tracking-tight",
+                    staff.name === 'Harry' ? "text-[#B8860B]" : "text-slate-900"
+                  )}>
+                    {staff.name}
+                  </h3>
+                  <div className="flex gap-1.5">
                     {staff.badges.map(badge => (
                       <BadgeIcon key={badge} type={badge} />
                     ))}
                   </div>
-                </h3>
-                <p className="text-xs text-slate-500">{staff.role}</p>
+                </div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{staff.role}</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto pl-14 sm:pl-0">
-              <div className="flex items-center gap-4 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-8 lg:gap-12">
+              <div className="flex items-center gap-6">
                 <div className="text-center">
-                  <p className="font-bold text-slate-700">{staff.upsellRate}%</p>
-                  <p>Upsell</p>
+                  <p className="text-lg font-black text-slate-900 tracking-tighter">{staff.upsellRate}%</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upsell</p>
                 </div>
                 <div className="text-center">
-                  <p className="font-bold text-slate-700">{staff.accuracy}%</p>
-                  <p>Caisse</p>
+                  <p className="text-lg font-black text-slate-900 tracking-tighter">{staff.accuracy}%</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Caisse</p>
                 </div>
                 <div className="text-center">
-                  <p className="font-bold text-slate-700">{staff.satisfaction}/5</p>
-                  <p>Avis</p>
+                  <p className="text-lg font-black text-slate-900 tracking-tighter">{staff.satisfaction}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avis</p>
                 </div>
               </div>
               
-              <div className="text-right">
-                <p className="text-2xl font-black text-slate-900">{staff.score}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Points</p>
+              <div className="lg:text-right bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-xl shadow-slate-900/20">
+                <p className="text-2xl font-black tracking-tighter">{staff.score}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60">Points</p>
               </div>
             </div>
           </motion.div>

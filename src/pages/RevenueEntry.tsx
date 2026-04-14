@@ -7,6 +7,8 @@ import { Establishment, Payments, Attachment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
 import { 
+  Zap,
+  ZapOff,
   CreditCard, 
   Nfc, 
   Banknote, 
@@ -31,7 +33,9 @@ import {
   Sparkles
 } from 'lucide-react';
 import { format } from 'date-fns';
+import clsx from 'clsx';
 import { Calculator } from '../components/Calculator';
+import { RushMode } from '../components/RushMode';
 import { RevenueHistory } from '../components/RevenueHistory';
 import { SearchableSelect } from '../components/SearchableSelect';
 
@@ -82,6 +86,7 @@ export function RevenueEntry() {
   const [isMidiActive, setIsMidiActive] = useState(true);
   const [isSoirActive, setIsSoirActive] = useState(true);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [isRushMode, setIsRushMode] = useState(false);
   const [activePaymentField, setActivePaymentField] = useState<{ service: 'midi' | 'soir', field: keyof Payments } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGeolocating, setIsGeolocating] = useState(false);
@@ -375,18 +380,34 @@ export function RevenueEntry() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saisie des Recettes</h1>
           <p className="text-slate-500 text-sm mt-1">Enregistrez les encaissements pour les services du midi et du soir.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-colors shadow-sm ${
-            isCalculatorOpen 
-              ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          <CalculatorIcon size={20} />
-          <span>Calculatrice</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsRushMode(!isRushMode)}
+            className={clsx(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
+              isRushMode 
+                ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" 
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            )}
+          >
+            {isRushMode ? <Zap size={20} className="animate-pulse" /> : <ZapOff size={20} />}
+            <span className="hidden sm:inline">{isRushMode ? "Mode Rush Actif" : "Mode Service Intense"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-colors shadow-sm ${
+              isCalculatorOpen 
+                ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <CalculatorIcon size={20} />
+            <span className="hidden sm:inline">Calculatrice</span>
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -551,6 +572,16 @@ export function RevenueEntry() {
         />
       )}
 
+      {isRushMode && (
+        <RushMode 
+          paymentsMidi={paymentsMidi}
+          paymentsSoir={paymentsSoir}
+          setPaymentsMidi={setPaymentsMidi}
+          setPaymentsSoir={setPaymentsSoir}
+          onClose={() => setIsRushMode(false)}
+        />
+      )}
+
       <RevenueHistory establishmentId={selectedEst} refreshTrigger={refreshTrigger} />
     </div>
   );
@@ -692,16 +723,23 @@ function ServiceSection({
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     recognition.lang = 'fr-FR';
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.continuous = true;
 
     recognition.onstart = () => {
       setIsListeningNotes(true);
     };
 
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setNotes(prev => prev ? prev + ' ' + transcript : transcript);
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        setNotes(prev => prev ? prev.trim() + ' ' + finalTranscript.trim() : finalTranscript.trim());
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -940,15 +978,28 @@ function ServiceSection({
               type="button"
               onClick={toggleListeningNotes}
               disabled={!isActive}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
                 isListeningNotes 
-                  ? 'bg-red-500 text-white animate-pulse' 
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/40 ring-2 ring-red-500/20' 
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50'
               }`}
               title="Dicter une note"
             >
-              {isListeningNotes ? <MicOff size={14} /> : <Mic size={14} />}
-              {isListeningNotes ? 'Arrêter' : 'Dicter'}
+              {isListeningNotes ? (
+                <div className="flex items-center gap-1">
+                  <span className="flex gap-0.5 items-center h-3">
+                    <span className="w-0.5 h-2 bg-white animate-[bounce_1s_infinite_0ms]" />
+                    <span className="w-0.5 h-3 bg-white animate-[bounce_1s_infinite_200ms]" />
+                    <span className="w-0.5 h-2 bg-white animate-[bounce_1s_infinite_400ms]" />
+                  </span>
+                  <span>Arrêter</span>
+                </div>
+              ) : (
+                <>
+                  <Mic size={14} />
+                  <span>Dicter</span>
+                </>
+              )}
             </button>
           </div>
           <div className="relative">

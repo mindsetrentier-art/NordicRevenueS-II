@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ThemePicker } from './ThemePicker';
 import { 
@@ -12,7 +12,8 @@ import {
   Settings, 
   Bell,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  Plus
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Logo } from './Logo';
@@ -26,9 +27,19 @@ import { NewsTicker } from './NewsTicker';
 
 export function Layout() {
   const { userProfile, logout } = useAuth();
-  const { themeColor } = useTheme();
+  const { themeColor, setThemeColor } = useTheme();
   const { t } = useLanguage();
   const navigate = useNavigate();
+
+  // Ambiance color rotation every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const randomColor = THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)];
+      setThemeColor(randomColor);
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [setThemeColor]);
 
   const handleLogout = async () => {
     await logout();
@@ -50,7 +61,7 @@ export function Layout() {
       <NewsTicker />
       
       <div 
-        className="flex-1 flex flex-col lg:flex-row bg-slate-50 relative"
+        className="flex-1 flex flex-col lg:flex-row bg-white relative overflow-hidden"
         style={{
           boxShadow: `inset 0 0 0 4px var(--theme-color), inset 0 0 20px 4px var(--theme-color-light)`
         }}
@@ -86,6 +97,16 @@ export function Layout() {
         <div className="p-6 flex items-center gap-3">
           <Logo className="w-8 h-8 rounded-lg shadow-sm" />
           <h1 className="font-bold text-xl tracking-tight text-slate-900">NordicRevenueS</h1>
+        </div>
+
+        <div className="px-4 mb-4">
+          <button
+            onClick={() => navigate('/entry')}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all active:scale-95"
+          >
+            <Plus size={20} />
+            Nouvelle Saisie
+          </button>
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
@@ -141,6 +162,15 @@ export function Layout() {
           </div>
         </div>
       </main>
+
+      {/* Mobile Floating Action Button */}
+      <button
+        onClick={() => navigate('/entry')}
+        className="lg:hidden fixed bottom-24 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center z-40 active:scale-90 transition-transform"
+        aria-label="Nouvelle Saisie"
+      >
+        <Plus size={28} />
+      </button>
 
       {/* Bottom Navigation (Mobile only) */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-transparent px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-50 flex items-center overflow-x-auto flex-nowrap gap-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300/80 [&::-webkit-scrollbar-thumb]:rounded-full">

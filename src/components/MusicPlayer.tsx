@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Music, Play, Pause, SkipForward, SkipBack, X, LogIn, Youtube } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Music, Play, Pause, SkipForward, SkipBack, X, LogIn, Youtube, Move } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
 type Platform = 'spotify' | 'deezer' | 'youtube' | 'special';
@@ -40,14 +41,20 @@ export function MusicPlayer() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [isFullyHidden, setIsFullyHidden] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const resetMinimizeTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!isOpen) {
       setIsMinimized(false);
+      setIsFullyHidden(false);
       timerRef.current = setTimeout(() => {
         setIsMinimized(true);
+        // After another 2 seconds of being minimized, fully hide it
+        timerRef.current = setTimeout(() => {
+          setIsFullyHidden(true);
+        }, 2000);
       }, 5000);
     }
   }, [isOpen]);
@@ -184,11 +191,20 @@ export function MusicPlayer() {
       const redirectUri = `${window.location.origin}/auth/${platform}/callback`;
       const response = await fetch(`/api/auth/${platform}/url?redirectUri=${encodeURIComponent(redirectUri)}`);
       
+      const contentType = response.headers.get("content-type");
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to get auth URL');
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to get auth URL');
+        } else {
+          throw new Error(`Erreur serveur (${response.status}). Veuillez vérifier la configuration.`);
+        }
       }
       
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Réponse invalide du serveur (attendu JSON).");
+      }
+
       const { url } = await response.json();
       const authWindow = window.open(url, `${platform}_oauth`, 'width=600,height=700');
 
@@ -276,26 +292,65 @@ export function MusicPlayer() {
 
   return (
     <>
-      <button
-        onMouseEnter={() => {
+      <motion.div
+        drag
+        dragMomentum={false}
+        onDragStart={() => {
           if (timerRef.current) clearTimeout(timerRef.current);
           setIsMinimized(false);
+          setIsFullyHidden(false);
         }}
-        onMouseLeave={resetMinimizeTimer}
-        onClick={() => {
-          setIsOpen(true);
-          setIsMinimized(false);
-        }}
-        className={`fixed bottom-6 z-40 flex items-center justify-center text-white shadow-lg transition-all duration-500 ease-in-out overflow-hidden ${getPlatformColor(activePlatform)} ${
-          isMinimized 
-            ? 'right-0 w-10 h-12 rounded-l-xl opacity-80 hover:opacity-100 hover:w-12' 
-            : 'right-6 w-14 h-14 rounded-full opacity-100'
-        }`}
+        onDragEnd={resetMinimizeTimer}
+        className={clsx(
+          "fixed z-40 transition-all duration-500 ease-in-out",
+          // Move it up on mobile to avoid being hidden by the bottom nav
+          "bottom-28 lg:bottom-6",
+          isMinimized ? "right-0" : "right-6"
+        )}
       >
-        <div className={`flex items-center justify-center transition-all duration-500 ${isMinimized ? 'translate-x-1' : ''}`}>
-          {activePlatform === 'youtube' ? <Youtube size={isMinimized ? 18 : 24} /> : <Music size={isMinimized ? 18 : 24} />}
-        </div>
-      </button>
+        <button
+          onMouseEnter={() => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            setIsMinimized(false);
+            setIsFullyHidden(false);
+          }}
+          onMouseLeave={resetMinimizeTimer}
+          onClick={() => {
+            if (isFullyHidden) {
+              setIsFullyHidden(false);
+              setIsMinimized(false);
+              resetMinimizeTimer();
+              return;
+            }
+            setIsOpen(true);
+            setIsMinimized(false);
+            setIsFullyHidden(false);
+          }}
+          className={clsx(
+            "flex items-center justify-center text-white shadow-lg transition-all duration-500 ease-in-out overflow-hidden relative group",
+            getPlatformColor(activePlatform),
+            isFullyHidden 
+              ? "w-2 h-12 rounded-l-full opacity-20 hover:opacity-100 hover:w-10" 
+              : isMinimized 
+                ? 'w-10 h-12 rounded-l-xl opacity-80 hover:opacity-100 hover:w-12' 
+                : 'w-14 h-14 rounded-full opacity-100'
+          )}
+        >
+          <div className={clsx(
+            "flex items-center justify-center transition-all duration-500",
+            (isMinimized || isFullyHidden) ? 'translate-x-1' : '',
+            isFullyHidden && "opacity-0 group-hover:opacity-100"
+          )}>
+            {activePlatform === 'youtube' ? <Youtube size={(isMinimized || isFullyHidden) ? 18 : 24} /> : <Music size={(isMinimized || isFullyHidden) ? 18 : 24} />}
+          </div>
+          
+          {!isMinimized && !isFullyHidden && (
+            <div className="absolute -top-1 -left-1 p-1 bg-white rounded-full text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm border border-slate-100">
+              <Move size={10} />
+            </div>
+          )}
+        </button>
+      </motion.div>
 
       {isOpen && (
         <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 flex flex-col border-l border-slate-200">

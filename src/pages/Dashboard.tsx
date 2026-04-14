@@ -6,6 +6,7 @@ import { Revenue, Establishment, AlertRule } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
 import { 
+  Plus,
   TrendingUp, 
   TrendingDown, 
   CreditCard, 
@@ -19,7 +20,8 @@ import {
   HelpCircle,
   Shield,
   X,
-  Calendar
+  Calendar,
+  Landmark
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -40,6 +42,8 @@ import clsx from 'clsx';
 import { AIInsights } from '../components/AIInsights';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { StaffLeaderboard } from '../components/StaffLeaderboard';
+import { EstablishmentLeaderboard } from '../components/EstablishmentLeaderboard';
+import { SuccessBadges } from '../components/SuccessBadges';
 
 const TrendBadge = ({ value, isPercentagePoint = false }: { value: number | null, isPercentagePoint?: boolean }) => {
   if (value === null) {
@@ -308,6 +312,20 @@ export function Dashboard() {
   const cashChange = cashPercentage - prevCashPercentage;
 
   const uniqueDays = new Set(filteredRevenues.map(r => r.date)).size;
+  // Group by establishment for stacked bar chart
+  const establishmentBreakdown = establishments.map(est => {
+    const estRevenues = revenues.filter(r => r.establishmentId === est.id);
+    const midi = estRevenues.filter(r => r.service === 'midi').reduce((sum, r) => sum + r.total, 0);
+    const soir = estRevenues.filter(r => r.service === 'soir').reduce((sum, r) => sum + r.total, 0);
+    return {
+      name: est.name,
+      midi,
+      soir,
+      total: midi + soir
+    };
+  }).filter(item => item.total > 0)
+    .sort((a, b) => b.total - a.total);
+
   const avgRevenue = uniqueDays > 0 ? totalRevenue / uniqueDays : 0;
   const bestDay = chartData.length > 0 
     ? chartData.reduce((max, r) => max.total > r.total ? max : r)
@@ -374,6 +392,14 @@ export function Dashboard() {
         </div>
         
         <div className="flex flex-col lg:flex-row gap-4 items-end">
+          <button
+            onClick={() => window.location.hash = '#/entry'}
+            className="w-full lg:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-2xl font-bold shadow-lg shadow-blue-600/20 transition-all active:scale-95"
+          >
+            <Plus size={20} />
+            Saisir une recette
+          </button>
+
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-sm hover:shadow-md transition-all duration-300 group">
             <Calendar size={18} className="text-blue-500 group-hover:scale-110 transition-transform" />
             <div className="flex items-center gap-2">
@@ -461,243 +487,259 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* KPI Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          { label: "Chiffre d'Affaires Total", value: totalRevenue, sub: "Sur la période sélectionnée", color: "text-slate-900" },
-          { label: "Moyenne par Jour", value: avgRevenue, sub: `Sur ${uniqueDays} jours d'activité`, color: "text-slate-900" },
-          { label: "Meilleure Journée", value: bestDay?.total || 0, sub: bestDay ? format(new Date(bestDay.date), 'dd MMMM yyyy', { locale: fr }) : '-', color: "text-emerald-600" }
-        ].map((kpi, i) => (
-          <motion.div 
-            key={kpi.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"
-          >
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">{kpi.label}</p>
-            <p className={clsx("text-3xl font-black tracking-tight", kpi.color)}>
-              {kpi.value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-            </p>
-            <div className="flex items-center gap-2 mt-3">
-              <div className="w-1 h-1 rounded-full bg-slate-300" />
-              <p className="text-xs font-medium text-slate-500">{kpi.sub}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Payment Breakdown Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Chiffre d'Affaires", value: totalRevenue, change: revenueChange, icon: <Banknote size={20} />, color: "bg-emerald-50 text-emerald-600", isPct: false },
-          { label: "Paiements CB", value: cbPercentage, change: cbChange, icon: <CreditCard size={20} />, color: "bg-blue-50 text-blue-600", isPct: true },
-          { label: "Tickets Resto", value: trPercentage, change: trChange, icon: <Receipt size={20} />, color: "bg-amber-50 text-amber-600", isPct: true },
-          { label: "Espèces", value: cashPercentage, change: cashChange, icon: <Banknote size={20} />, color: "bg-purple-50 text-purple-600", isPct: true }
-        ].map((card, i) => (
-          <motion.div 
-            key={card.label}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 + (i * 0.1) }}
-            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group"
-          >
+      {/* Bento Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 auto-rows-auto">
+        
+        {/* Main KPI: Total Revenue */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
+        >
+          <div>
             <div className="flex items-center justify-between mb-4">
-              <div className={clsx("p-2.5 rounded-xl shadow-sm group-hover:scale-110 transition-transform", card.color)}>
-                {card.icon}
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Chiffre d'Affaires Total</p>
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                <Banknote size={20} />
               </div>
-              <TrendBadge value={card.change} isPercentagePoint={card.isPct && card.label !== "Chiffre d'Affaires"} />
             </div>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">{card.label}</p>
-            <p className="text-2xl font-black text-slate-900 mt-1">
-              {card.isPct ? `${Math.round(card.value)}%` : card.value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            <p className="text-4xl font-black tracking-tighter text-slate-900">
+              {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
             </p>
-          </motion.div>
-        ))}
-      </div>
+          </div>
+          <div className="mt-6 flex items-center gap-3">
+            <TrendBadge value={revenueChange} />
+            <p className="text-xs font-medium text-slate-500">vs période précédente</p>
+          </div>
+        </motion.div>
 
-      <AIInsights 
-        revenueData={chartData} 
-        paymentData={paymentBreakdown} 
-        periodLabel={`Du ${format(new Date(startDate), 'dd MMM yyyy', { locale: fr })} au ${format(new Date(endDate), 'dd MMM yyyy', { locale: fr })}`} 
-      />
+        {/* Average Revenue */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="lg:col-span-1 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
+        >
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Moyenne / Jour</p>
+            <p className="text-2xl font-black tracking-tight text-slate-900">
+              {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            </p>
+          </div>
+          <p className="text-xs font-medium text-slate-500 mt-4">Sur {uniqueDays} jours</p>
+        </motion.div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Évolution du CA</h2>
+        {/* Best Day */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="lg:col-span-1 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
+        >
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Record Journée</p>
+            <p className="text-2xl font-black tracking-tight text-emerald-600">
+              {bestDay?.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) || '-'}
+            </p>
+          </div>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4">
+            {bestDay ? format(new Date(bestDay.date), 'dd MMM yyyy', { locale: fr }) : '-'}
+          </p>
+        </motion.div>
+
+        {/* AI Insights - Tall Card */}
+        <div className="lg:col-span-2 lg:row-span-2">
+          <AIInsights 
+            revenueData={chartData} 
+            paymentData={paymentBreakdown} 
+            periodLabel={`Du ${format(new Date(startDate), 'dd MMM yyyy', { locale: fr })} au ${format(new Date(endDate), 'dd MMM yyyy', { locale: fr })}`} 
+          />
+        </div>
+
+        {/* Main Evolution Chart */}
+        <div className="lg:col-span-4 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">Évolution du CA</h2>
+              <p className="text-xs text-slate-500 font-medium mt-1">Analyse temporelle des performances</p>
+            </div>
             <div className="flex gap-2">
               <button 
                 onClick={() => setQuickRange(7)}
                 className={clsx(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+                  "px-4 py-2 text-xs font-bold rounded-xl transition-all",
                   differenceInDays(new Date(endDate), new Date(startDate)) === 6
-                    ? "bg-blue-600 text-white shadow-sm shadow-blue-600/20"
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
               >
-                Semaine
+                7J
               </button>
               <button 
                 onClick={() => setQuickRange(30)}
                 className={clsx(
-                  "px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors",
+                  "px-4 py-2 text-xs font-bold rounded-xl transition-all",
                   differenceInDays(new Date(endDate), new Date(startDate)) === 29
-                    ? "bg-blue-600 text-white shadow-sm shadow-blue-600/20"
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
               >
-                Mois
+                30J
               </button>
             </div>
           </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`dashboard-chart-${selectedEst}-${selectedService}-${startDate}-${endDate}`}>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} key={`dashboard-chart-bento`}>
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
                   tickFormatter={(val) => format(new Date(val), 'dd MMM', { locale: fr })}
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 12 }}
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
                   tickFormatter={(val) => `${val / 1000}k`}
                 />
                 <Tooltip 
-                  cursor={{ fill: '#f1f5f9', radius: 4 }}
+                  cursor={{ fill: '#f8fafc', radius: 12 }}
                   content={<CustomTooltip />}
-                />
-                <Legend 
-                  verticalAlign="top" 
-                  align="right" 
-                  iconType="circle"
-                  content={({ payload }) => (
-                    <div className="flex justify-end gap-4 mb-4">
-                      {payload?.map((entry: any, index: number) => (
-                        <div key={`item-${index}`} className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{entry.value === 'midi' ? 'Midi' : 'Soir'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 />
                 <Bar 
                   dataKey="midi" 
-                  name="midi"
                   stackId="a"
                   fill="#fbbf24" 
                   radius={[0, 0, 0, 0]} 
-                  maxBarSize={40}
+                  maxBarSize={32}
                   onMouseEnter={(data) => setHoveredData(data)}
                   onMouseLeave={() => setHoveredData(null)}
-                  className="cursor-pointer transition-all duration-300"
                 />
                 <Bar 
                   dataKey="soir" 
-                  name="soir"
                   stackId="a"
                   fill="#6366f1" 
-                  radius={[4, 4, 0, 0]} 
-                  maxBarSize={40}
+                  radius={[6, 6, 0, 0]} 
+                  maxBarSize={32}
                   onMouseEnter={(data) => setHoveredData(data)}
                   onMouseLeave={() => setHoveredData(null)}
-                  className="cursor-pointer transition-all duration-300"
                 />
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Service Breakdown Detail (Visible on Hover) */}
-          <div className="mt-8 pt-6 border-t border-slate-50 min-h-[100px] flex items-center justify-center">
-            {hoveredData ? (
-              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between group hover:bg-amber-50 transition-all">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center shadow-sm">
-                      <Clock size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Service Midi</p>
-                      <p className="text-lg font-black text-slate-900">
-                        {hoveredData.midi.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part du CA</p>
-                    <p className="text-sm font-bold text-amber-600">
-                      {hoveredData.total > 0 ? ((hoveredData.midi / hoveredData.total) * 100).toFixed(1) : 0}%
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl flex items-center justify-between group hover:bg-indigo-50 transition-all">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
-                      <Clock size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Service Soir</p>
-                      <p className="text-lg font-black text-slate-900">
-                        {hoveredData.soir.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part du CA</p>
-                    <p className="text-sm font-bold text-indigo-600">
-                      {hoveredData.total > 0 ? ((hoveredData.soir / hoveredData.total) * 100).toFixed(1) : 0}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-slate-400 animate-pulse">
-                <HelpCircle size={24} className="opacity-20" />
-                <p className="text-xs font-bold uppercase tracking-widest opacity-40">Survolez une barre pour voir le détail par service</p>
-              </div>
-            )}
-          </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900 mb-6">Moyens de Paiement</h2>
-            <div className="space-y-6">
-              {[
-                { label: 'Carte Bancaire', value: paymentBreakdown.cb, color: 'bg-blue-600' },
-                { label: 'Tickets Resto', value: paymentBreakdown.tr, color: 'bg-amber-500' },
-                { label: 'Espèces', value: paymentBreakdown.cash, color: 'bg-emerald-500' },
-                { label: 'AMEX', value: paymentBreakdown.amex, color: 'bg-purple-500' },
-                { label: 'Virement', value: paymentBreakdown.transfer, color: 'bg-slate-400' },
-              ].map((item) => {
-                const percentage = totalPayments > 0 ? Math.round((item.value / totalPayments) * 100) : 0;
-                return (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-slate-600 font-medium">{item.label}</span>
-                      <span className="font-bold text-slate-900">{percentage}%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={clsx("h-full rounded-full", item.color)} style={{ width: `${percentage}%` }}></div>
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Establishment Breakdown Chart */}
+        <div className="lg:col-span-4 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">CA par Établissement</h2>
+              <p className="text-xs text-slate-500 font-medium mt-1">Répartition des revenus par site et service</p>
             </div>
           </div>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={establishmentBreakdown} 
+                layout="vertical"
+                margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  type="number"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                  tickFormatter={(val) => `${(val / 1000).toFixed(1)}k€`}
+                />
+                <YAxis 
+                  dataKey="name" 
+                  type="category"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#475569', fontSize: 12, fontWeight: 700 }}
+                  width={100}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc', radius: 12 }}
+                  formatter={(value: number) => [`${value.toLocaleString('fr-FR')} €`, '']}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend verticalAlign="top" align="right" iconType="circle" />
+                <Bar dataKey="midi" name="Midi" stackId="a" fill="#fbbf24" radius={[0, 0, 0, 0]} barSize={24} />
+                <Bar dataKey="soir" name="Soir" stackId="a" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={24} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      </div>
 
-      {/* Staff Leaderboard */}
-      <StaffLeaderboard />
+        {/* Payment Methods Breakdown */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col">
+          <h2 className="text-lg font-black text-slate-900 mb-8 tracking-tight">Répartition Paiements</h2>
+          <div className="space-y-6 flex-1 flex flex-col justify-center">
+            {[
+              { label: 'Carte Bancaire', value: paymentBreakdown.cb, color: 'bg-blue-600', icon: <CreditCard size={14} /> },
+              { label: 'Tickets Resto', value: paymentBreakdown.tr, color: 'bg-amber-500', icon: <Receipt size={14} /> },
+              { label: 'Espèces', value: paymentBreakdown.cash, color: 'bg-emerald-500', icon: <Banknote size={14} /> },
+              { label: 'AMEX', value: paymentBreakdown.amex, color: 'bg-purple-500', icon: <Landmark size={14} /> },
+            ].map((item) => {
+              const percentage = totalPayments > 0 ? Math.round((item.value / totalPayments) * 100) : 0;
+              return (
+                <div key={item.label} className="group">
+                  <div className="flex justify-between items-center text-sm mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 group-hover:text-slate-900 transition-colors">{item.icon}</span>
+                      <span className="text-slate-600 font-bold tracking-tight">{item.label}</span>
+                    </div>
+                    <span className="font-black text-slate-900">{percentage}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${percentage}%` }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                      className={clsx("h-full rounded-full shadow-sm", item.color)} 
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Small Cards Row */}
+        <div className="lg:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Paiements CB", value: cbPercentage, change: cbChange, icon: <CreditCard size={18} />, color: "text-blue-600", bg: "bg-blue-50" },
+            { label: "Tickets Resto", value: trPercentage, change: trChange, icon: <Receipt size={18} />, color: "text-amber-600", bg: "bg-amber-50" },
+            { label: "Espèces", value: cashPercentage, change: cashChange, icon: <Banknote size={18} />, color: "text-emerald-600", bg: "bg-emerald-50" },
+            { label: "Autres", value: 100 - (cbPercentage + trPercentage + cashPercentage), change: null, icon: <Plus size={18} />, color: "text-slate-600", bg: "bg-slate-50" }
+          ].map((card, i) => (
+            <div key={card.label} className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-md transition-all">
+              <div className={clsx("w-10 h-10 rounded-xl flex items-center justify-center mb-4 shadow-sm", card.bg, card.color)}>
+                {card.icon}
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{card.label}</p>
+              <p className="text-xl font-black text-slate-900">{Math.round(card.value)}%</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Staff Leaderboard - Full Width */}
+        <div className="lg:col-span-full">
+          <StaffLeaderboard />
+        </div>
+
+        {/* Performance & Gamification Section */}
+        <div className="lg:col-span-full grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <EstablishmentLeaderboard revenues={revenues} establishments={establishments} />
+          <SuccessBadges revenues={revenues} />
+        </div>
+
+      </div>
 
       {/* Footer Legal & Support */}
       <div className="mt-12 border-t border-slate-200 pt-8 pb-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">

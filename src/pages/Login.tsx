@@ -10,7 +10,7 @@ export function Login() {
   const [loading, setLoading] = React.useState(false);
 
   if (authLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50">Chargement...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-white">Chargement...</div>;
   }
 
   if (userProfile) {
@@ -37,7 +37,7 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-white flex items-center justify-center p-4 font-sans">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
         <div className="flex flex-col items-center mb-8">
           <Logo className="w-20 h-20 rounded-2xl shadow-md mb-4" />

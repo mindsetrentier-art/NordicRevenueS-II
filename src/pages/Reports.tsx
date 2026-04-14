@@ -239,6 +239,7 @@ export function Reports() {
     kpis: true,
     mainChart: true,
     paymentChart: true,
+    trendsChart: true,
     dailyTable: true,
     aiAnalysis: false,
     reportName: `Rapport de Recettes - ${format(new Date(), 'dd/MM/yyyy')}`,
@@ -500,6 +501,7 @@ export function Reports() {
       { id: 'report-ai-analysis', condition: exportOptions.aiAnalysis, display: 'block', forceNewPage: true },
       { id: 'report-main-chart', condition: exportOptions.mainChart, display: 'block', forceNewPage: true },
       { id: 'report-payment-section', condition: exportOptions.paymentChart, display: 'grid', forceNewPage: true },
+      { id: 'report-trends-section', condition: exportOptions.trendsChart, display: 'grid', forceNewPage: true },
       { id: 'report-daily-table', condition: exportOptions.dailyTable, display: 'block', forceNewPage: true },
       { id: 'report-footer', condition: true, display: 'flex', forceNewPage: false },
     ];
@@ -949,6 +951,44 @@ export function Reports() {
       triggeredAlerts
     };
   });
+
+  // Calculate moving average for total revenue (7-day trend)
+  const chartDataWithTrends = chartData.map((d, i, arr) => {
+    const windowSize = 7;
+    const start = Math.max(0, i - windowSize + 1);
+    const window = arr.slice(start, i + 1);
+    const avg = window.reduce((sum, item) => sum + item.total, 0) / window.length;
+    return { ...d, movingAvg: avg };
+  });
+
+  // Calculate average revenue by day of week
+  const dayOfWeekNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  const dayOfWeekData = [
+    { day: 'Lun', total: 0, count: 0, index: 1 },
+    { day: 'Mar', total: 0, count: 0, index: 2 },
+    { day: 'Mer', total: 0, count: 0, index: 3 },
+    { day: 'Jeu', total: 0, count: 0, index: 4 },
+    { day: 'Ven', total: 0, count: 0, index: 5 },
+    { day: 'Sam', total: 0, count: 0, index: 6 },
+    { day: 'Dim', total: 0, count: 0, index: 0 },
+  ];
+
+  filteredRevenues.forEach(rev => {
+    const date = parseISO(rev.date);
+    if (!isNaN(date.getTime())) {
+      const dayIdx = date.getDay();
+      const target = dayOfWeekData.find(d => d.index === dayIdx);
+      if (target) {
+        target.total += rev.total;
+        target.count += 1;
+      }
+    }
+  });
+
+  const avgDayOfWeekData = dayOfWeekData.map(d => ({
+    day: d.day,
+    avg: d.count > 0 ? d.total / d.count : 0
+  }));
 
   const sortedRevenues = [...filteredRevenues].sort((a, b) => {
     let comparison = 0;
@@ -1957,6 +1997,168 @@ Généré par NordicRevenueS`;
             </div>
           </div>
 
+          {/* Trends Section */}
+          <div id="report-trends-section" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Revenue Trends with Moving Average */}
+            <div id="report-revenue-trends" className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Tendances de Croissance</h3>
+                  <p className="text-xs text-slate-500 font-medium">Moyenne mobile sur 7 jours vs CA Réel</p>
+                </div>
+                <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-0.5 bg-blue-600" />
+                    <span className="text-slate-600">Réel</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-0.5 bg-emerald-500 border-t border-emerald-500 border-dashed" />
+                    <span className="text-slate-600">Tendance</span>
+                  </div>
+                </div>
+              </div>
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <LineChart data={chartDataWithTrends} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      tickFormatter={(value) => `${value}€`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number) => [`${value.toFixed(2)} €`]}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="total" 
+                      name="CA Réel"
+                      stroke="#2563eb" 
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="movingAvg" 
+                      name="Tendance (7j)"
+                      stroke="#10b981" 
+                      strokeWidth={3}
+                      strokeDasharray="5 5"
+                      dot={false}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Day of Week Analysis */}
+            <div id="report-dow-trends" className={`p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Performance par Jour de Semaine</h3>
+                  <p className="text-xs text-slate-500 font-medium">Moyenne du CA par jour sur la période</p>
+                </div>
+              </div>
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <BarChart data={avgDayOfWeekData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="day" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      tickFormatter={(value) => `${value}€`}
+                    />
+                    <Tooltip 
+                      cursor={{ fill: '#f1f5f9', opacity: 0.4 }}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number) => [`${value.toFixed(2)} €`, 'Moyenne']}
+                    />
+                    <Bar 
+                      dataKey="avg" 
+                      fill="#6366f1" 
+                      radius={[8, 8, 0, 0]}
+                      maxBarSize={40}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Payment Method Trends (Multi-line) */}
+            <div id="report-payment-trends-line" className={`lg:col-span-2 p-6 rounded-2xl border ${
+              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
+              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
+              'bg-white border-slate-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Tendances par Moyen de Paiement</h3>
+                  <p className="text-xs text-slate-500 font-medium">Évolution temporelle comparative des flux</p>
+                </div>
+              </div>
+              <div className="h-96 w-full">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                      tickFormatter={(value) => `${value}€`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: number) => [`${value.toFixed(2)} €`]}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                    {visibleChartPayments.cb && <Line type="monotone" dataKey="cb" name="CB" stroke={paymentColors.cb} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.cbContactless && <Line type="monotone" dataKey="cbContactless" name="CB SC" stroke={paymentColors.cbContactless} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.amex && <Line type="monotone" dataKey="amex" name="AMEX" stroke={paymentColors.amex} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.amexContactless && <Line type="monotone" dataKey="amexContactless" name="AMEX SC" stroke={paymentColors.amexContactless} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.tr && <Line type="monotone" dataKey="tr" name="TR" stroke={paymentColors.tr} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.trContactless && <Line type="monotone" dataKey="trContactless" name="TR SC" stroke={paymentColors.trContactless} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.cash && <Line type="monotone" dataKey="cash" name="Espèces" stroke={paymentColors.cash} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                    {visibleChartPayments.transfer && <Line type="monotone" dataKey="transfer" name="Virement" stroke={paymentColors.transfer} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
           {/* Daily Breakdown Table */}
           <div id="report-daily-table" className={`p-6 rounded-2xl border overflow-x-auto ${
             exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
@@ -2475,6 +2677,21 @@ Généré par NordicRevenueS`;
                       <div className="flex-1">
                         <span className="block text-sm font-bold text-slate-700">Moyens de Paiement</span>
                         <span className="text-[10px] text-slate-400 font-medium">Répartition détaillée par type de règlement</span>
+                      </div>
+                    </label>
+                    <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.trendsChart ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${exportOptions.trendsChart ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                        {exportOptions.trendsChart && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={exportOptions.trendsChart}
+                        onChange={(e) => setExportOptions({...exportOptions, trendsChart: e.target.checked})}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <span className="block text-sm font-bold text-slate-700">Analyses des Tendances</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Moyennes mobiles et performance par jour de semaine</span>
                       </div>
                     </label>
                     <label className={`flex items-center gap-4 p-4 border rounded-2xl cursor-pointer transition-all ${exportOptions.dailyTable ? 'bg-blue-50/50 border-blue-200 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>

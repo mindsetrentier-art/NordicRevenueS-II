@@ -13,6 +13,11 @@ interface AirQualityData {
     olive: number;
     ragweed: number;
   };
+  forecast: {
+    date: string;
+    aqi: number;
+    pollen: number;
+  }[];
 }
 
 interface WeatherData {
@@ -75,7 +80,7 @@ export function WeatherWidget() {
       if (hideTimer) clearTimeout(hideTimer);
       hideTimer = setTimeout(() => {
         setIsVisible(false);
-      }, 10000); // Increased to 10s so user can read everything
+      }, 20000); // Increased to 20s for better visibility
     };
 
     startTimer();
@@ -148,15 +153,23 @@ export function WeatherWidget() {
   }, [isDragging, dragStart]);
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lon: position.coords.longitude,
-        });
-      },
-      (error) => console.error('Error getting location:', error)
-    );
+    const getPos = () => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          // Fallback to Paris if geolocation fails
+          setLocation({ lat: 48.8566, lon: 2.3522 });
+          setLocationName('Paris (Défaut)');
+        }
+      );
+    };
+    getPos();
   }, []);
 
   useEffect(() => {
@@ -218,7 +231,7 @@ export function WeatherWidget() {
       // 3. Fetch Air Quality & Pollen
       try {
         const aqRes = await fetch(
-          `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${location.lat}&longitude=${location.lon}&current=european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen`
+          `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${location.lat}&longitude=${location.lon}&current=european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&hourly=european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=auto`
         );
         
         if (!aqRes.ok) throw new Error(`Air Quality API returned ${aqRes.status}`);
@@ -234,6 +247,34 @@ export function WeatherWidget() {
             (currentAq.olive_pollen || 0) + 
             (currentAq.ragweed_pollen || 0);
 
+          // Extract daily max AQI and Pollen for forecast
+          const hourly = aqData.hourly;
+          const aqForecast: { date: string; aqi: number; pollen: number }[] = [];
+          if (hourly && hourly.time) {
+            const days: Record<string, { aqi: number; pollen: number }> = {};
+            hourly.time.forEach((t: string, i: number) => {
+              const date = t.split('T')[0];
+              const aqiVal = hourly.european_aqi[i];
+              const pollenVal = 
+                (hourly.alder_pollen?.[i] || 0) + 
+                (hourly.birch_pollen?.[i] || 0) + 
+                (hourly.grass_pollen?.[i] || 0) + 
+                (hourly.mugwort_pollen?.[i] || 0) + 
+                (hourly.olive_pollen?.[i] || 0) + 
+                (hourly.ragweed_pollen?.[i] || 0);
+
+              if (!days[date]) {
+                days[date] = { aqi: aqiVal, pollen: pollenVal };
+              } else {
+                days[date].aqi = Math.max(days[date].aqi, aqiVal);
+                days[date].pollen = Math.max(days[date].pollen, pollenVal);
+              }
+            });
+            Object.entries(days).slice(1, 6).forEach(([date, vals]) => {
+              aqForecast.push({ date, aqi: vals.aqi, pollen: vals.pollen });
+            });
+          }
+
           setAirQuality({
             aqi: currentAq.european_aqi,
             pollen: {
@@ -244,7 +285,8 @@ export function WeatherWidget() {
               mugwort: currentAq.mugwort_pollen || 0,
               olive: currentAq.olive_pollen || 0,
               ragweed: currentAq.ragweed_pollen || 0
-            }
+            },
+            forecast: aqForecast
           });
         }
       } catch (error) {
@@ -310,13 +352,36 @@ export function WeatherWidget() {
     return "Très élevé";
   };
 
+  const getSuggestions = () => {
+    if (!weather || !airQuality) return [];
+    const suggestions = [];
+
+    // Weather suggestions
+    if (weather.temp > 25) suggestions.push("Hydratez-vous régulièrement 💧");
+    if (weather.temp < 5) suggestions.push("Couvrez-vous bien 🧣");
+    if (weather.code >= 51) suggestions.push("N'oubliez pas votre parapluie ☂️");
+    if (weather.code === 0 && weather.isDay) suggestions.push("Profitez du soleil ! ☀️");
+
+    // AQI suggestions
+    if (airQuality.aqi > 60) suggestions.push("Évitez les activités physiques intenses en extérieur 🏃‍♂️");
+    if (airQuality.aqi > 80) suggestions.push("Portez un masque si vous êtes sensible 😷");
+    if (airQuality.aqi < 30) suggestions.push("Air pur : idéal pour aérer votre intérieur 🪟");
+
+    // Pollen suggestions
+    if (airQuality.pollen.total > 50) suggestions.push("Alerte pollen : rincez vos cheveux le soir 🚿");
+
+    return suggestions;
+  };
+
   const toggleScale = () => {
     setScale(prev => (prev >= 1.5 ? 0.8 : prev + 0.2));
   };
 
+  const suggestions = getSuggestions();
+
   return (
     <div 
-      className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center pointer-events-none"
+      className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center pointer-events-none"
       style={{
         transform: `translate(calc(-50% + ${position.x}px), ${position.y}px) scale(${scale})`,
         transformOrigin: 'top center'
@@ -326,12 +391,13 @@ export function WeatherWidget() {
         onMouseDown={handleMouseDown}
         onTouchStart={handleMouseDown}
         className={`
-          bg-white/90 backdrop-blur-md border border-slate-200/50 px-4 py-1.5 rounded-b-2xl shadow-xl 
-          flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-slate-600 text-xs font-medium transition-all duration-500 pointer-events-auto
-          cursor-move select-none group max-w-[90vw]
+          bg-white/95 backdrop-blur-2xl border border-slate-200/60 px-6 py-2.5 rounded-b-[2.5rem] shadow-2xl shadow-slate-300/40 
+          flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-slate-600 text-xs font-bold transition-all duration-500 pointer-events-auto
+          cursor-move select-none group max-w-[95vw] border-t-0
           ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}
         `}
       >
+        <div className="absolute top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-slate-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className="flex items-center gap-1.5">
           <Clock size={14} className="text-slate-400" />
           <span className="tabular-nums font-bold">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -461,7 +527,7 @@ export function WeatherWidget() {
                   <Leaf size={14} className={getPollenColor(airQuality.pollen.total)} />
                   Pollens : {getPollenLabel(airQuality.pollen.total)}
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-600">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-600 mb-3">
                   <div className="flex justify-between"><span>Aulne:</span> <span className="font-medium">{Math.round(airQuality.pollen.alder)}</span></div>
                   <div className="flex justify-between"><span>Bouleau:</span> <span className="font-medium">{Math.round(airQuality.pollen.birch)}</span></div>
                   <div className="flex justify-between"><span>Graminées:</span> <span className="font-medium">{Math.round(airQuality.pollen.grass)}</span></div>
@@ -470,6 +536,42 @@ export function WeatherWidget() {
                   <div className="flex justify-between"><span>Ambroisie:</span> <span className="font-medium">{Math.round(airQuality.pollen.ragweed)}</span></div>
                 </div>
               </div>
+
+              {airQuality.forecast.length > 0 && (
+                <div className="pt-3 border-t border-slate-100 mb-3">
+                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Prévisions Air & Pollens</h5>
+                  <div className="space-y-2">
+                    {airQuality.forecast.map(f => (
+                      <div key={f.date} className="flex justify-between items-center text-[10px]">
+                        <span className="text-slate-500 w-10">{new Date(f.date).toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
+                        <div className="flex items-center gap-3 flex-1 justify-end">
+                          <div className="flex items-center gap-1">
+                            <Wind size={10} className={getAqiColor(f.aqi)} />
+                            <span className={clsx("font-bold", getAqiColor(f.aqi))}>{f.aqi}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Leaf size={10} className={getPollenColor(f.pollen)} />
+                            <span className={clsx("font-bold", getPollenColor(f.pollen))}>{Math.round(f.pollen)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {suggestions.length > 0 && (
+                <div className="pt-3 border-t border-slate-100">
+                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Conseils du jour</h5>
+                  <div className="space-y-1">
+                    {suggestions.slice(0, 2).map((s, i) => (
+                      <div key={i} className="text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

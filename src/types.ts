@@ -55,6 +55,15 @@ export interface Revenue {
   updatedAt: Date;
 }
 
+export interface Badge {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  unlockedAt?: Date;
+}
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
