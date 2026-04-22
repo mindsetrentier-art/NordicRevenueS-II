@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Loader2, AlertCircle, CloudRain } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, CloudRain, ChevronDown, ChevronUp, CheckCircle2, TrendingDown } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
@@ -9,6 +9,12 @@ interface AIInsightsProps {
   revenueData: any[];
   paymentData: any;
   periodLabel: string;
+}
+
+interface InsightData {
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
 }
 
 const getGeolocation = (): Promise<{lat: number, lon: number}> => {
@@ -36,13 +42,14 @@ const fetchWeatherForecast = async (lat: number, lon: number) => {
 };
 
 export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsightsProps) {
-  const [insights, setInsights] = useState<string | null>(() => {
+  const [insights, setInsights] = useState<InsightData | null>(() => {
     const cached = localStorage.getItem(`ai_insights_${periodLabel}`);
     if (cached) {
       try {
         const { data, timestamp } = JSON.parse(cached);
         // Cache for 24 hours for the same period
         if (Date.now() - timestamp < 86400000) {
+          if (typeof data === 'string') return null; // Force refresh if old format
           return data;
         }
       } catch (e) {
@@ -53,6 +60,7 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   const generateInsights = async () => {
     if (!ai) {
@@ -100,12 +108,13 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
         Répartition des paiements : ${JSON.stringify(paymentData)}
         ${weatherContext}
         
-        Rédige une analyse très concise (3 ou 4 phrases courtes) en français pour le gérant.
-        1. Identifie la tendance principale du CA (hausse, baisse, jours forts).
-        2. S'il y a des prévisions météo, fais une prédiction ou donne un conseil basé sur la météo à venir et l'historique (ex: "Pluie prévue ce week-end, prévoyez plus de livraisons").
-        3. Donne un conseil d'action rapide.
-        
-        Ne fais pas d'introduction, va droit au but. Utilise un ton professionnel et encourageant.
+        Rédige une analyse concise en français pour le gérant. Tu dois IMPÉRATIVEMENT répondre au format JSON valide avec la structure suivante exacte :
+        {
+          "summary": "Résumé de 3 ou 4 phrases identifiant la tendance principale du CA, incluant une remarque météo (s'il y a lieu), et donnant un conseil d'action globale.",
+          "strengths": ["Point fort 1 (ex: Forte hausse du CA mardi)", "Point fort 2 (ex: Excellente proportion de paiements CB)"],
+          "weaknesses": ["Point faible ou point d'attention 1 (ex: Baisse d'activité le jeudi)", "Point faible 2 (ex: Volume faible en espèces)"]
+        }
+        Ne renvoie que du JSON, sans formatage markdown \`\`\`json.
       `;
 
       const response = await ai.models.generateContent({
@@ -113,9 +122,12 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
         contents: prompt,
       });
 
-      const text = response.text || "Analyse non disponible.";
-      setInsights(text);
-      localStorage.setItem(`ai_insights_${periodLabel}`, JSON.stringify({ data: text, timestamp: Date.now() }));
+      let text = response.text || "{}";
+      text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+      
+      const parsedData = JSON.parse(text) as InsightData;
+      setInsights(parsedData);
+      localStorage.setItem(`ai_insights_${periodLabel}`, JSON.stringify({ data: parsedData, timestamp: Date.now() }));
       localStorage.removeItem('ai_insights_quota_error');
     } catch (err: any) {
       console.error("Erreur IA:", err);
@@ -174,10 +186,63 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
           )}
 
           {insights && !loading && (
-            <div className="text-indigo-900 text-sm leading-relaxed space-y-2">
-              {insights.split('\n').map((paragraph, idx) => (
-                paragraph.trim() ? <p key={idx}>{paragraph}</p> : null
-              ))}
+            <div className="mt-3">
+              <div className="text-indigo-900 text-sm leading-relaxed space-y-2 bg-white/60 p-4 rounded-xl border border-indigo-100/50 backdrop-blur-sm shadow-sm font-medium">
+                {insights.summary.split('\n').map((paragraph, idx) => (
+                  paragraph.trim() ? <p key={idx}>{paragraph}</p> : null
+                ))}
+              </div>
+              
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="flex items-center gap-2 text-indigo-700 font-semibold text-sm hover:text-indigo-900 bg-indigo-100/50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200/50"
+                  aria-expanded={showDetails}
+                >
+                  {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {showDetails ? "Masquer les détails" : "Voir les points forts et faibles"}
+                </button>
+                
+                {showDetails && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                      <h4 className="flex items-center gap-2 text-emerald-800 font-bold mb-3 text-sm">
+                        <CheckCircle2 size={16} className="text-emerald-600" />
+                        Points forts
+                      </h4>
+                      <ul className="space-y-2">
+                        {insights.strengths?.map((strength, idx) => (
+                          <li key={idx} className="flex gap-2 text-emerald-900 text-sm">
+                            <span className="text-emerald-500 mt-0.5 shrink-0">•</span>
+                            <span className="leading-snug">{strength}</span>
+                          </li>
+                        ))}
+                        {(!insights.strengths || insights.strengths.length === 0) && (
+                          <li className="text-emerald-700 text-sm italic">Aucun point fort spécifique détecté.</li>
+                        )}
+                      </ul>
+                    </div>
+                    
+                    <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100">
+                      <h4 className="flex items-center gap-2 text-rose-800 font-bold mb-3 text-sm">
+                        <TrendingDown size={16} className="text-rose-600" />
+                        Points d'attention
+                      </h4>
+                      <ul className="space-y-2">
+                        {insights.weaknesses?.map((weakness, idx) => (
+                          <li key={idx} className="flex gap-2 text-rose-900 text-sm">
+                            <span className="text-rose-500 mt-0.5 shrink-0">•</span>
+                            <span className="leading-snug">{weakness}</span>
+                          </li>
+                        ))}
+                        {(!insights.weaknesses || insights.weaknesses.length === 0) && (
+                          <li className="text-rose-700 text-sm italic">Aucun point d'attention spécifique détecté.</li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -185,7 +250,7 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
         <button
           onClick={generateInsights}
           disabled={loading}
-          className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mt-4 md:mt-0"
         >
           {loading ? 'Génération...' : insights ? 'Actualiser l\'analyse' : 'Générer l\'analyse'}
         </button>

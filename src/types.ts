@@ -84,6 +84,10 @@ export interface AlertRule {
   threshold: number;
   paymentMethod?: keyof Payments; // e.g., 'cb', 'amex'
   timeframe: 'daily' | 'weekly' | 'monthly';
+  notifyEmail?: boolean;
+  emailAddress?: string;
+  notifySms?: boolean;
+  phoneNumber?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt?: Date;

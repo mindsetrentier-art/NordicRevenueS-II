@@ -38,6 +38,7 @@ import { Calculator } from '../components/Calculator';
 import { RushMode } from '../components/RushMode';
 import { RevenueHistory } from '../components/RevenueHistory';
 import { SearchableSelect } from '../components/SearchableSelect';
+import { DatePicker } from '../components/DatePicker';
 
 const INITIAL_PAYMENTS: Payments = {
   cb: 0,
@@ -447,12 +448,9 @@ export function RevenueEntry() {
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Date d'exploitation</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+            <DatePicker 
+              date={date} 
+              onChange={setDate} 
             />
           </div>
         </div>
@@ -514,14 +512,38 @@ export function RevenueEntry() {
         </div>
 
         {/* Footer / Submit */}
-        <div className="sticky bottom-4 bg-white p-6 pb-24 sm:pb-6 sm:pr-24 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/50 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
-          <div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Journalier</p>
-            <p className="text-3xl font-black text-slate-900">
+        <div className="sticky bottom-4 bg-white p-6 pb-24 sm:pb-6 sm:pr-24 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/50 flex flex-col sm:flex-row items-center justify-between gap-6 z-10">
+          <div className="w-full sm:w-auto flex-1 max-w-xs">
+            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Total Journalier</p>
+            <p className="text-3xl font-black text-slate-900 mb-3">
               {totalJournee.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
             </p>
+            
+            {/* Objectif 5000€ Progress */}
+            <div className="w-full">
+              <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-1.5">
+                <span>Objectif 5 000 €</span>
+                <span className={clsx(
+                  totalJournee >= 5000 ? "text-emerald-600" : "text-blue-600"
+                )}>
+                  {Math.min(100, (totalJournee / 5000) * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                <div 
+                  className={clsx(
+                    "h-full rounded-full transition-all duration-700 ease-out",
+                    totalJournee >= 5000 
+                      ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" 
+                      : "bg-gradient-to-r from-blue-400 to-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+                  )}
+                  style={{ width: `${Math.min((totalJournee / 5000) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-4 w-full sm:w-auto">
+          
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0">
             {success && (
               <span className="flex items-center text-emerald-600 font-semibold text-sm">
                 <CheckCircle2 className="mr-1" size={18} /> Enregistré

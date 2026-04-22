@@ -1,11 +1,11 @@
 {
   "name": "NordicRevenueS",
   "short_name": "NordicRevenueS",
-  "description": "Pilotez vos revenus multi-sites avec clarté.",
+  "description": "Pilotez vos revenus multi-sites avec clarté et élégance.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0284C7",
+  "background_color": "#0B101E",
+  "theme_color": "#BF953F",
   "icons": [
     {
       "src": "/icon-192.png",

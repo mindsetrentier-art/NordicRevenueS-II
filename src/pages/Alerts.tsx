@@ -27,6 +27,10 @@ export function Alerts() {
   const [thresholdError, setThresholdError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<keyof Payments>('cb');
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [notifyEmail, setNotifyEmail] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [notifySms, setNotifySms] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -82,6 +86,10 @@ export function Alerts() {
       setThreshold(alert.threshold);
       setPaymentMethod(alert.paymentMethod || 'cb');
       setTimeframe(alert.timeframe);
+      setNotifyEmail(alert.notifyEmail || false);
+      setEmailAddress(alert.emailAddress || '');
+      setNotifySms(alert.notifySms || false);
+      setPhoneNumber(alert.phoneNumber || '');
       setIsActive(alert.isActive);
     } else {
       setEditingAlert(null);
@@ -91,6 +99,10 @@ export function Alerts() {
       setThreshold('');
       setPaymentMethod('cb');
       setTimeframe('daily');
+      setNotifyEmail(false);
+      setEmailAddress(userProfile?.email || '');
+      setNotifySms(false);
+      setPhoneNumber('');
       setIsActive(true);
     }
     setError(null);
@@ -130,15 +142,33 @@ export function Alerts() {
       return;
     }
 
+    if (notifyEmail && !emailAddress.trim()) {
+      setError("Veuillez renseigner une adresse email valide.");
+      return;
+    }
+
+    if (notifySms) {
+      const phoneRegex = /^\+[0-9]{9,14}$/;
+      const cleanedPhone = phoneNumber.trim();
+      if (!cleanedPhone || !phoneRegex.test(cleanedPhone)) {
+        setError("Le numéro doit commencer par '+' suivi de chiffres uniquement (entre 10 et 15 caractères au total, ex: +33612345678).");
+        return;
+      }
+    }
+
     try {
-      const alertData = {
+      const alertData: Omit<AlertRule, 'id' | 'userId' | 'createdAt'> & { userId?: string; createdAt?: any; updatedAt: any } = {
         userId: userProfile.uid,
         name,
         type,
         establishmentId,
         threshold: numThreshold,
-        paymentMethod: type === 'payment_method_change' ? paymentMethod : null,
+        paymentMethod: type === 'payment_method_change' ? paymentMethod : undefined,
         timeframe,
+        notifyEmail,
+        emailAddress: notifyEmail ? emailAddress.trim() : undefined,
+        notifySms,
+        phoneNumber: notifySms ? phoneNumber.trim() : undefined,
         isActive,
         updatedAt: serverTimestamp()
       };
@@ -351,10 +381,22 @@ export function Alerts() {
                         <span className="font-medium text-slate-900">
                           {alert.type === 'revenue_drop' ? 'Baisse de CA' : 'Variation Paiement'}
                         </span>
-                        <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500">
                           {alert.type === 'revenue_drop' ? `< ${alert.threshold} €` : `> ${alert.threshold} %`}
                           {alert.type === 'payment_method_change' && alert.paymentMethod && ` (${paymentMethodLabels[alert.paymentMethod] || alert.paymentMethod})`}
                         </span>
+                        <div className="flex items-center gap-2 mt-1">
+                          {alert.notifyEmail && (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                              Email
+                            </span>
+                          )}
+                          {alert.notifySms && (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100">
+                              SMS
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 text-sm text-slate-600">
@@ -570,13 +612,61 @@ export function Alerts() {
                 </select>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 pb-2 border-t border-slate-100">
+                <h3 className="text-sm font-bold text-slate-800 mb-3">Canaux de notification</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer mb-2">
+                      <input 
+                        type="checkbox" 
+                        checked={notifyEmail}
+                        onChange={(e) => setNotifyEmail(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-slate-700">M'alerter par Email</span>
+                    </label>
+                    {notifyEmail && (
+                      <input 
+                        type="email" 
+                        value={emailAddress}
+                        onChange={(e) => setEmailAddress(e.target.value)}
+                        placeholder="Ex: contact@monentreprise.com"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ml-7 max-w-[calc(100%-1.75rem)]"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer mb-2">
+                      <input 
+                        type="checkbox" 
+                        checked={notifySms}
+                        onChange={(e) => setNotifySms(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-slate-700">M'alerter par SMS</span>
+                    </label>
+                    {notifySms && (
+                      <input 
+                        type="tel" 
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        placeholder="Ex: +33612345678"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ml-7 max-w-[calc(100%-1.75rem)]"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input 
                     type="checkbox" 
                     checked={isActive}
                     onChange={(e) => setIsActive(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
                   />
                   <span className="text-sm font-medium text-slate-700">Alerte active</span>
                 </label>

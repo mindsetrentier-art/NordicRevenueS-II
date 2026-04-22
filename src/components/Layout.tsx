@@ -5,7 +5,7 @@ import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ThemePicker } from './ThemePicker';
 import { 
-  LayoutDashboard, 
+  Gauge, 
   Store, 
   Receipt, 
   BarChart3, 
@@ -47,7 +47,7 @@ export function Layout() {
   };
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { to: '/', icon: Gauge, label: t('nav.dashboard') },
     { to: '/entry', icon: Receipt, label: t('nav.entry') },
     { to: '/reports', icon: BarChart3, label: t('nav.reports') },
     { to: '/establishments', icon: Store, label: t('nav.establishments') },
@@ -173,22 +173,30 @@ export function Layout() {
       </button>
 
       {/* Bottom Navigation (Mobile only) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-transparent px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-50 flex items-center overflow-x-auto flex-nowrap gap-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-300/80 [&::-webkit-scrollbar-thumb]:rounded-full">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1 z-50 flex items-center overflow-x-auto no-scrollbar gap-1 shadow-[0_-8px_30px_rgb(0,0,0,0.08)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) => clsx(
-              "flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all shrink-0 min-w-[4.5rem]",
-              isActive 
-                ? "text-blue-600" 
-                : "text-slate-500 hover:text-slate-900"
-            )}
+            className="flex flex-col items-center justify-center gap-1 min-w-[4.5rem] py-2 px-1 relative group shrink-0"
           >
             {({ isActive }) => (
               <>
-                <item.icon size={22} className={clsx("transition-transform", "active:scale-90", isActive && "stroke-[2.5px]")} />
-                <span className="text-[10px] font-semibold truncate w-full text-center">{item.label.split(' ')[0]}</span>
+                <div className={clsx(
+                  "flex items-center justify-center w-14 h-8 rounded-full transition-all duration-300 relative z-10",
+                  isActive ? "bg-blue-100 text-blue-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-900"
+                )}>
+                  <item.icon size={20} className={clsx("transition-transform duration-300", isActive ? "scale-110 stroke-[2.5px]" : "active:scale-90")} />
+                </div>
+                <span className={clsx(
+                  "text-[10px] font-bold truncate w-full text-center transition-colors duration-300",
+                  isActive ? "text-blue-700" : "text-slate-500 group-hover:text-slate-900"
+                )}>
+                  {item.label.split(' ')[0]}
+                </span>
+                {isActive && (
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-blue-600 rounded-b-full shadow-[0_2px_8px_rgba(37,99,235,0.5)]"></div>
+                )}
               </>
             )}
           </NavLink>
