@@ -4,9 +4,15 @@
   "description": "Pilotez vos revenus multi-sites avec clarté et élégance.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B101E",
-  "theme_color": "#BF953F",
+  "background_color": "#0A0C10",
+  "theme_color": "#D4AF37",
   "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Delete, Palette, Check, Mic } from 'lucide-react';
+import { X, Delete, Palette, Check, Mic, Undo2, Redo2 } from 'lucide-react';
 
 interface CalculatorProps {
   onClose: () => void;
@@ -7,6 +7,15 @@ interface CalculatorProps {
   onPaymentTypeSelect?: (type: string) => void;
   onApply?: (value: number) => void;
   initialValue?: string;
+}
+
+interface CalcState {
+  display: string;
+  previousValue: number | null;
+  operator: string | null;
+  waitingForNewValue: boolean;
+  history: {equation: string, result: string}[];
+  isDirty: boolean;
 }
 
 type Theme = 'light' | 'dark' | 'glass' | 'white' | 'black' | 'neonPink' | 'neonGreen' | 'neonBlue' | 'neonYellow' | 'neonOrange' | 'neonCyan' | 'neonPurple';
@@ -168,7 +177,63 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   const [position, setPosition] = useState({ x: window.innerWidth - 450, y: window.innerHeight - 550 });
   const [isDragging, setIsDragging] = useState(false);
   const [theme, setTheme] = useState<Theme>('light');
+  const [undoStack, setUndoStack] = useState<CalcState[]>([]);
+  const [redoStack, setRedoStack] = useState<CalcState[]>([]);
   const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+
+  const saveState = () => {
+    setUndoStack(prev => [...prev, {
+      display,
+      previousValue,
+      operator,
+      waitingForNewValue,
+      history,
+      isDirty
+    }]);
+    setRedoStack([]);
+  };
+
+  const undo = () => {
+    if (undoStack.length === 0) return;
+    const lastState = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, {
+      display,
+      previousValue,
+      operator,
+      waitingForNewValue,
+      history,
+      isDirty
+    }]);
+
+    setDisplay(lastState.display);
+    setPreviousValue(lastState.previousValue);
+    setOperator(lastState.operator);
+    setWaitingForNewValue(lastState.waitingForNewValue);
+    setHistory(lastState.history);
+    setIsDirty(lastState.isDirty);
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => [...prev, {
+      display,
+      previousValue,
+      operator,
+      waitingForNewValue,
+      history,
+      isDirty
+    }]);
+
+    setDisplay(nextState.display);
+    setPreviousValue(nextState.previousValue);
+    setOperator(nextState.operator);
+    setWaitingForNewValue(nextState.waitingForNewValue);
+    setHistory(nextState.history);
+    setIsDirty(nextState.isDirty);
+  };
 
   const paymentMethods = [
     { id: 'cb', label: 'Carte', icon: '💳' },
@@ -237,6 +302,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const inputDigit = (digit: string) => {
+    saveState();
     setIsDirty(true);
     if (waitingForNewValue) {
       setDisplay(digit);
@@ -247,6 +313,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const inputDecimal = () => {
+    saveState();
     setIsDirty(true);
     if (waitingForNewValue) {
       setDisplay('0.');
@@ -259,20 +326,24 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   };
 
   const clear = () => {
+    saveState();
     setIsDirty(true);
     setDisplay('0');
     setPreviousValue(null);
     setOperator(null);
     setWaitingForNewValue(false);
+    setHistory([]);
   };
 
   const backspace = () => {
+    saveState();
     setIsDirty(true);
     if (waitingForNewValue) return;
     setDisplay(display.length > 1 ? display.slice(0, -1) : '0');
   };
 
   const performOperation = (nextOperator: string) => {
+    saveState();
     setIsDirty(true);
     const inputValue = parseFloat(display);
 
@@ -306,6 +377,23 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   // Keyboard support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          redo();
+        } else {
+          e.preventDefault();
+          undo();
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      
       if (e.key >= '0' && e.key <= '9') inputDigit(e.key);
       if (e.key === '.') inputDecimal();
       if (e.key === '=' || e.key === 'Enter') {
@@ -319,7 +407,7 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [display, previousValue, operator, waitingForNewValue]);
+  }, [display, previousValue, operator, waitingForNewValue, undoStack, redoStack]);
 
   const [isListening, setIsListening] = useState(false);
   const [detectedAmount, setDetectedAmount] = useState<string | null>(null);
@@ -405,7 +493,26 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
           >
             <Palette size={16} />
           </button>
-          <h3 className="font-bold text-sm tracking-wide uppercase opacity-80">Calculatrice</h3>
+          
+          <div className="h-4 w-px flex-shrink-0 bg-current opacity-20 mx-1"></div>
+          
+          <button 
+            onClick={(e) => { e.stopPropagation(); undo(); }}
+            disabled={undoStack.length === 0}
+            className={`p-1.5 rounded-full transition-colors ${undoStack.length === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/10'}`}
+            title="Annuler (Ctrl+Z)"
+          >
+            <Undo2 size={16} />
+          </button>
+
+          <button 
+            onClick={(e) => { e.stopPropagation(); redo(); }}
+            disabled={redoStack.length === 0}
+            className={`p-1.5 rounded-full transition-colors ${redoStack.length === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/10'}`}
+            title="Rétablir (Ctrl+Y)"
+          >
+            <Redo2 size={16} />
+          </button>
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); onClose(); }} 

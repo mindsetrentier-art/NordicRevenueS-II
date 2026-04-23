@@ -6,13 +6,13 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { ThemePicker } from './ThemePicker';
 import { 
   Gauge, 
-  Store, 
-  Receipt, 
-  BarChart3, 
-  Settings, 
-  Bell,
+  Building2, 
+  CircleDollarSign, 
+  LineChart, 
+  SlidersHorizontal, 
+  BellRing,
   LogOut,
-  MessageSquare,
+  Star,
   Plus
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -48,12 +48,12 @@ export function Layout() {
 
   const navItems = [
     { to: '/', icon: Gauge, label: t('nav.dashboard') },
-    { to: '/entry', icon: Receipt, label: t('nav.entry') },
-    { to: '/reports', icon: BarChart3, label: t('nav.reports') },
-    { to: '/establishments', icon: Store, label: t('nav.establishments') },
-    { to: '/alerts', icon: Bell, label: t('nav.alerts') },
-    { to: '/reviews', icon: MessageSquare, label: t('nav.reviews') },
-    { to: '/settings', icon: Settings, label: t('nav.settings') },
+    { to: '/entry', icon: CircleDollarSign, label: t('nav.entry') },
+    { to: '/reports', icon: LineChart, label: t('nav.reports') },
+    { to: '/establishments', icon: Building2, label: t('nav.establishments') },
+    { to: '/alerts', icon: BellRing, label: t('nav.alerts') },
+    { to: '/reviews', icon: Star, label: t('nav.reviews') },
+    { to: '/settings', icon: SlidersHorizontal, label: t('nav.settings') },
   ];
 
   return (

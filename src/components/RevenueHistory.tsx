@@ -4,8 +4,8 @@ import { db } from '../firebase';
 import { Revenue, Payments } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar } from 'lucide-react';
-import { format, parseISO, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar, Sun, CloudRain, Cloud, Snowflake, CloudLightning, CloudFog, CloudDrizzle } from 'lucide-react';
+import { format, parseISO, subDays, startOfMonth, endOfMonth, subMonths, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface RevenueHistoryProps {
@@ -13,6 +13,70 @@ interface RevenueHistoryProps {
   refreshTrigger: number;
 }
 
+const getWeatherIcon = (code: number) => {
+  if (code === 0 || code === 1) return <Sun size={18} className="text-amber-500" />;
+  if (code === 2 || code === 3) return <Cloud size={18} className="text-slate-400" />;
+  if (code >= 45 && code <= 48) return <CloudFog size={18} className="text-slate-400" />;
+  if (code >= 51 && code <= 55) return <CloudDrizzle size={18} className="text-blue-400" />;
+  if (code >= 61 && code <= 65) return <CloudRain size={18} className="text-blue-600" />;
+  if (code >= 71 && code <= 77) return <Snowflake size={18} className="text-sky-300" />;
+  if (code >= 95) return <CloudLightning size={18} className="text-purple-600" />;
+  return <Cloud size={18} className="text-slate-400" />;
+};
+
+const getWeatherLabel = (code: number) => {
+  if (code === 0) return 'Dégagé';
+  if (code === 1 || code === 2 || code === 3) return 'Nuageux';
+  if (code >= 45 && code <= 48) return 'Brouillard';
+  if (code >= 51 && code <= 55) return 'Bruine';
+  if (code >= 61 && code <= 65) return 'Pluie';
+  if (code >= 71 && code <= 77) return 'Neige';
+  if (code >= 95) return 'Orage';
+  return 'Inconnu';
+};
+
+const fetchHistoricalWeather = async (startDate: string, endDate: string) => {
+  try {
+    let lat = 48.8566;
+    let lon = 2.3522;
+    try {
+      if (navigator.geolocation) {
+        const pos = await new Promise<GeolocationPosition>((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
+        lat = pos.coords.latitude;
+        lon = pos.coords.longitude;
+      }
+    } catch(e) {}
+
+    // Try forecast API first (covers up to 3 months past and future)
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=weathercode,temperature_2m_max&timezone=auto`);
+    if (!res.ok) throw new Error("Erreur réseau (forecast)");
+    let data = await res.json();
+    
+    // Fallback to archive if it fails (e.g., date too old)
+    if (data && data.error) {
+      const archiveRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=weathercode,temperature_2m_max&timezone=auto`);
+      if (!archiveRes.ok) throw new Error("Erreur réseau (archive)");
+      data = await archiveRes.json();
+    }
+    
+    if (data && data.daily) {
+      const weatherMap: Record<string, { temp: number, code: number }> = {};
+      data.daily.time.forEach((dateStr: string, idx: number) => {
+        weatherMap[dateStr] = {
+          temp: Math.round(data.daily.temperature_2m_max[idx]),
+          code: data.daily.weathercode[idx]
+        };
+      });
+      return { data: weatherMap, error: null };
+    }
+    throw new Error("Données météo invalides");
+  } catch (error) {
+    console.error("Erreur météo historique:", error);
+    return { data: null, error: "Impossible de récupérer les données météorologiques." };
+  }
+};
+
+// ...
 export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHistoryProps) {
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,6 +86,8 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
   const [filterPeriod, setFilterPeriod] = useState<'30days' | 'thisMonth' | 'lastMonth' | 'custom' | 'all'>('30days');
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [weatherData, setWeatherData] = useState<Record<string, { temp: number, code: number }>>({});
+  const [weatherError, setWeatherError] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   useEffect(() => {
@@ -75,6 +141,33 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
 
     fetchRevenues();
   }, [establishmentId, refreshTrigger, filterPeriod, startDate, endDate]);
+
+  const totalPages = Math.ceil(revenues.length / itemsPerPage);
+  const paginatedRevenues = revenues.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    // Fetch weather when paginatedRevenues changes
+    const fetchWeather = async () => {
+      setWeatherError(null);
+      if (paginatedRevenues.length === 0) return;
+      
+      const dates = paginatedRevenues.map(r => r.date).sort();
+      const firstDate = dates[0];
+      let lastDate = dates[dates.length - 1];
+      
+      const response = await fetchHistoricalWeather(firstDate, lastDate);
+      if (response.error) {
+        setWeatherError(response.error);
+      } else if (response.data) {
+        setWeatherData(prev => ({ ...prev, ...response.data }));
+      }
+    };
+    
+    fetchWeather();
+  }, [paginatedRevenues]);
 
   const handleDelete = async () => {
     if (!deletingRevenue) return;
@@ -131,12 +224,6 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
     });
   };
 
-  const totalPages = Math.ceil(revenues.length / itemsPerPage);
-  const paginatedRevenues = revenues.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
   if (!establishmentId) return null;
 
   return (
@@ -180,6 +267,13 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
         </div>
       </div>
       
+      {weatherError && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+          <CloudLightning size={16} className="text-amber-500" />
+          <span>{weatherError}</span>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-8 text-slate-500">Chargement de l'historique...</div>
       ) : revenues.length === 0 ? (
@@ -189,7 +283,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200 text-sm text-slate-500">
-                <th className="py-3 px-4 font-semibold">Date</th>
+                <th className="py-3 px-4 font-semibold">Date & Météo</th>
                 <th className="py-3 px-4 font-semibold">Service</th>
                 <th className="py-3 px-4 font-semibold">Notes</th>
                 <th className="py-3 px-4 font-semibold">Pièces jointes</th>
@@ -198,10 +292,25 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
               </tr>
             </thead>
             <tbody className="text-sm">
-              {paginatedRevenues.map(revenue => (
+              {paginatedRevenues.map(revenue => {
+                const weather = weatherData[revenue.date];
+                return (
                 <tr key={revenue.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-3 px-4 font-medium text-slate-900">
-                    {format(parseISO(revenue.date), 'dd MMM yyyy', { locale: fr })}
+                  <td className="py-3 px-4">
+                    <div className="font-medium text-slate-900 pb-1">
+                      {format(parseISO(revenue.date), 'dd MMM yyyy', { locale: fr })}
+                    </div>
+                    {weather ? (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                        {getWeatherIcon(weather.code)}
+                        <span>{weather.temp}°C</span>
+                        <span className="hidden sm:inline opacity-70">({getWeatherLabel(weather.code)})</span>
+                      </div>
+                    ) : (weatherError ? (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                        <span className="opacity-70 italic">Météo indisponible</span>
+                      </div>
+                    ) : null)}
                   </td>
                   <td className="py-3 px-4 capitalize text-slate-600">{revenue.service}</td>
                   <td className="py-3 px-4 text-slate-500 max-w-[200px] truncate relative group" title={revenue.notes}>
@@ -262,7 +371,8 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -730,7 +730,7 @@ export function Dashboard() {
 
         {/* Staff Leaderboard - Full Width */}
         <div className="lg:col-span-full">
-          <StaffLeaderboard />
+          <StaffLeaderboard revenues={revenues} />
         </div>
 
         {/* Performance & Gamification Section */}

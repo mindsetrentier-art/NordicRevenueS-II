@@ -25,6 +25,7 @@ export function Alerts() {
   const [establishmentId, setEstablishmentId] = useState('all');
   const [threshold, setThreshold] = useState<number | ''>('');
   const [thresholdError, setThresholdError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<keyof Payments>('cb');
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [notifyEmail, setNotifyEmail] = useState(false);
@@ -131,6 +132,17 @@ export function Alerts() {
     }
   };
 
+  const handleEmailChange = (val: string) => {
+    setEmailAddress(val);
+    if (!val.trim()) {
+      setEmailError('L\'adresse email est requise.');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      setEmailError('Le format de l\'adresse email est incorrect.');
+    } else {
+      setEmailError(null);
+    }
+  };
+
   const saveAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userProfile) return;
@@ -142,9 +154,15 @@ export function Alerts() {
       return;
     }
 
-    if (notifyEmail && !emailAddress.trim()) {
-      setError("Veuillez renseigner une adresse email valide.");
-      return;
+    if (notifyEmail) {
+      if (!emailAddress.trim()) {
+        setEmailError('L\'adresse email est requise.');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)) {
+        setEmailError('Le format de l\'adresse email est incorrect.');
+        return;
+      }
     }
 
     if (notifySms) {
@@ -157,7 +175,7 @@ export function Alerts() {
     }
 
     try {
-      const alertData: Omit<AlertRule, 'id' | 'userId' | 'createdAt'> & { userId?: string; createdAt?: any; updatedAt: any } = {
+      const alertData: any = {
         userId: userProfile.uid,
         name,
         type,
@@ -627,13 +645,18 @@ export function Alerts() {
                       <span className="text-sm font-medium text-slate-700">M'alerter par Email</span>
                     </label>
                     {notifyEmail && (
-                      <input 
-                        type="email" 
-                        value={emailAddress}
-                        onChange={(e) => setEmailAddress(e.target.value)}
-                        placeholder="Ex: contact@monentreprise.com"
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ml-7 max-w-[calc(100%-1.75rem)]"
-                      />
+                      <div className="ml-7 max-w-[calc(100%-1.75rem)]">
+                        <input 
+                          type="email" 
+                          value={emailAddress}
+                          onChange={(e) => handleEmailChange(e.target.value)}
+                          placeholder="Ex: contact@monentreprise.com"
+                          className={`w-full bg-slate-50 border ${emailError ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'} text-slate-900 rounded-xl px-4 py-2 text-sm focus:ring-2 outline-none`}
+                        />
+                        {emailError && (
+                          <p className="text-xs text-red-500 mt-1.5 font-medium">{emailError}</p>
+                        )}
+                      </div>
                     )}
                   </div>
 
