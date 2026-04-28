@@ -114,6 +114,18 @@ service cloud.firestore {
              data.createdAt is timestamp &&
              (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
+
+    function isValidCost(data) {
+      return hasOnlyAllowedFields(['establishmentId', 'month', 'laborCost', 'cogs', 'otherCosts', 'createdBy', 'createdAt', 'updatedAt']) &&
+             data.establishmentId is string && data.establishmentId.size() > 0 &&
+             data.month is string && data.month.matches("^\\d{4}-\\d{2}$") &&
+             data.laborCost is number && data.laborCost >= 0 &&
+             data.cogs is number && data.cogs >= 0 &&
+             (!('otherCosts' in data) || data.otherCosts == null || data.otherCosts is number) &&
+             data.createdBy is string && data.createdBy == request.auth.uid &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
     
     // ===============================================================
     // Rules
@@ -160,6 +172,16 @@ service cloud.firestore {
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidAlertRule(request.resource.data) &&
                     request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /costs/{costId} {
+      allow read: if isAuthenticated() && hasAccessToEstablishment(resource.data.establishmentId, null);
+      allow create: if isAuthenticated() && hasAccessToEstablishment(request.resource.data.establishmentId, null) && isValidCost(request.resource.data);
+      allow update: if isAuthenticated() && hasAccessToEstablishment(resource.data.establishmentId, null) && isValidCost(request.resource.data) &&
+                    request.resource.data.establishmentId == resource.data.establishmentId &&
+                    request.resource.data.month == resource.data.month &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.createdBy == request.auth.uid);
     }
   }
 }

@@ -353,7 +353,7 @@ export function Reports() {
           const revSnap = await getDocs(revQuery);
           revData = revSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Revenue));
         } else {
-          const estIds = establishments.map(e => e.id);
+          const estIds = establishments.map(e => e.id).filter(id => id !== undefined && id !== null);
           if (selectedEst !== 'all') {
             // Manager selected a specific establishment
             if (estIds.includes(selectedEst)) {

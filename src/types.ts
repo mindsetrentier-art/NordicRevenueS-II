@@ -18,6 +18,8 @@ export interface Establishment {
   vatNumber?: string;
   latitude?: number;
   longitude?: number;
+  surface?: number;
+  capacity?: number;
   createdBy?: string;
   createdAt: Date;
   updatedAt?: Date;
@@ -91,6 +93,18 @@ export interface AlertRule {
   isActive: boolean;
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface Cost {
+  id: string;
+  establishmentId: string;
+  month: string; // YYYY-MM
+  laborCost: number;
+  cogs: number;
+  otherCosts?: number;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface FirestoreErrorInfo {

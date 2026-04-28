@@ -66,6 +66,14 @@
           "type": "number",
           "description": "Geographic longitude"
         },
+        "surface": {
+          "type": "number",
+          "description": "Surface area in square meters"
+        },
+        "capacity": {
+          "type": "number",
+          "description": "Max seating capacity"
+        },
         "createdBy": {
           "type": "string",
           "description": "UID of the user who created the establishment"
@@ -161,8 +169,9 @@
           "description": "Type of the alert"
         },
         "threshold": {
-          "type": "number",
-          "description": "Threshold value for the alert"
+          "number": 165,
+          "description": "Threshold value for the alert",
+          "type": "number"
         },
         "paymentMethod": {
           "type": "string",
@@ -187,6 +196,46 @@
         }
       },
       "required": ["userId", "name", "establishmentId", "type", "threshold", "timeframe", "isActive", "createdAt"]
+    },
+    "Cost": {
+      "title": "Cost",
+      "description": "Monthly costs for an establishment to calculate prime cost and margin",
+      "type": "object",
+      "properties": {
+        "establishmentId": {
+          "type": "string",
+          "description": "ID of the establishment"
+        },
+        "month": {
+          "type": "string",
+          "description": "Month of the cost entry (YYYY-MM)"
+        },
+        "laborCost": {
+          "type": "number",
+          "description": "Total labor costs for the month"
+        },
+        "cogs": {
+          "type": "number",
+          "description": "Cost of Goods Sold (raw materials)"
+        },
+        "otherCosts": {
+          "type": "number",
+          "description": "Other fixed or variable costs"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the user who created the entry"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["establishmentId", "month", "laborCost", "cogs", "createdBy", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -213,6 +262,12 @@
         "$ref": "#/entities/AlertRule"
       },
       "description": "Custom alert rules"
+    },
+    "/costs/{costId}": {
+      "schema": {
+        "$ref": "#/entities/Cost"
+      },
+      "description": "Monthly cost records"
     }
   }
 }

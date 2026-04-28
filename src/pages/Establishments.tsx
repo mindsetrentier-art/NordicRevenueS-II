@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Store, Plus, Edit2, Trash2, X, Check, AlertCircle } from 'lucide-react';
+import { Store, Plus, Edit2, Trash2, X, Check, AlertCircle, Maximize2, Users } from 'lucide-react';
 
 export function Establishments() {
   const { userProfile } = useAuth();
@@ -23,6 +23,8 @@ export function Establishments() {
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [vatNumber, setVatNumber] = useState('');
+  const [surface, setSurface] = useState<number | undefined>();
+  const [capacity, setCapacity] = useState<number | undefined>();
   const [latitude, setLatitude] = useState<number | undefined>();
   const [longitude, setLongitude] = useState<number | undefined>();
   const [isGeolocating, setIsGeolocating] = useState(false);
@@ -82,6 +84,8 @@ export function Establishments() {
           city,
           postalCode,
           vatNumber: vatNumber || null,
+          surface: surface || null,
+          capacity: capacity || null,
           latitude: latitude || null,
           longitude: longitude || null,
           updatedAt: serverTimestamp()
@@ -93,6 +97,8 @@ export function Establishments() {
           city,
           postalCode,
           vatNumber: vatNumber || null,
+          surface: surface || null,
+          capacity: capacity || null,
           latitude: latitude || null,
           longitude: longitude || null,
           createdBy: userProfile.uid,
@@ -167,6 +173,8 @@ export function Establishments() {
     setCity(est.city || '');
     setPostalCode(est.postalCode || '');
     setVatNumber(est.vatNumber || '');
+    setSurface(est.surface);
+    setCapacity(est.capacity);
     setLatitude(est.latitude);
     setLongitude(est.longitude);
     setIsModalOpen(true);
@@ -179,6 +187,8 @@ export function Establishments() {
     setCity('');
     setPostalCode('');
     setVatNumber('');
+    setSurface(undefined);
+    setCapacity(undefined);
     setLatitude(undefined);
     setLongitude(undefined);
   };
@@ -265,7 +275,18 @@ export function Establishments() {
                 {est.address ? `${est.address}, ${est.postalCode} ${est.city}` : 'Aucune adresse renseignée'}
               </p>
               
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium relative z-10">
+              <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4 text-xs text-slate-400 font-medium relative z-10">
+                <div className="flex items-center gap-2">
+                  <Maximize2 size={12} />
+                  <span>{est.surface || '-'} m²</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users size={12} />
+                  <span>{est.capacity || '-'} places</span>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-300 font-medium relative z-10">
                 <span>ID: {est.id.substring(0, 8)}...</span>
               </div>
 
@@ -373,6 +394,29 @@ export function Establishments() {
                   className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                   placeholder="Ex: FR 12 345678901"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Surface (m²)</label>
+                  <input
+                    type="number"
+                    value={surface || ''}
+                    onChange={(e) => setSurface(e.target.value ? parseFloat(e.target.value) : undefined)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Ex: 85"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Capacité (Sièges)</label>
+                  <input
+                    type="number"
+                    value={capacity || ''}
+                    onChange={(e) => setCapacity(e.target.value ? parseInt(e.target.value) : undefined)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Ex: 40"
+                  />
+                </div>
               </div>
 
               <div className="space-y-3">
