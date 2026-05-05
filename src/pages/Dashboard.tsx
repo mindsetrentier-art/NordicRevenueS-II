@@ -179,6 +179,12 @@ export function Dashboard() {
                     <span className="text-[10px] font-black text-slate-700">{data.cb.toLocaleString('fr-FR')} €</span>
                   </div>
                 )}
+                {data.cbsc > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-500">CBSC</span>
+                    <span className="text-[10px] font-black text-slate-700">{data.cbsc.toLocaleString('fr-FR')} €</span>
+                  </div>
+                )}
                 {data.cash > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-500">Espèces</span>
@@ -393,7 +399,8 @@ export function Dashboard() {
       if (curr.service === 'midi') existing.midi += curr.total;
       if (curr.service === 'soir') existing.soir += curr.total;
       
-      existing.cb += curr.payments.cb + curr.payments.cbContactless;
+      existing.cb += curr.payments.cb;
+      existing.cbsc += curr.payments.cbContactless;
       existing.cash += curr.payments.cash;
       existing.amex += curr.payments.amex + curr.payments.amexContactless;
       existing.tr += curr.payments.tr + curr.payments.trContactless;
@@ -404,7 +411,8 @@ export function Dashboard() {
         total: curr.total,
         midi: curr.service === 'midi' ? curr.total : 0,
         soir: curr.service === 'soir' ? curr.total : 0,
-        cb: curr.payments.cb + curr.payments.cbContactless,
+        cb: curr.payments.cb,
+        cbsc: curr.payments.cbContactless,
         cash: curr.payments.cash,
         amex: curr.payments.amex + curr.payments.amexContactless,
         tr: curr.payments.tr + curr.payments.trContactless,
@@ -412,7 +420,7 @@ export function Dashboard() {
       });
     }
     return acc;
-  }, [] as { date: string, total: number, midi: number, soir: number, cb: number, cash: number, amex: number, tr: number, transfer: number }[]);
+  }, [] as { date: string, total: number, midi: number, soir: number, cb: number, cbsc: number, cash: number, amex: number, tr: number, transfer: number }[]);
 
   // Sort chart data
   groupedData.sort((a, b) => a.date.localeCompare(b.date));
@@ -498,7 +506,7 @@ export function Dashboard() {
     : null;
 
   // Calculate total costs for the selected period
-  const totalCostsInPeriod = costs.reduce((sum, c) => sum + c.laborCost + c.cogs + (c.otherCosts || 0), 0);
+  const totalCostsInPeriod = costs.reduce((sum, c) => sum + c.laborCost + c.cogs + (c.otherCosts || 0) + (c.rent || 0) + (c.utilities || 0) + (c.bankLoan || 0) + (c.taxes || 0) + (c.vat || 0), 0);
   const periodMonthLabel = costs.length > 0 
     ? costs.length === 1 
       ? format(parseISO(`${costs[0].month}-01`), 'MMMM yyyy', { locale: fr })

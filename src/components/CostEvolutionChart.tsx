@@ -28,7 +28,7 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
     }
     acc[monthKey].laborCost += cost.laborCost;
     acc[monthKey].cogs += cost.cogs;
-    acc[monthKey].otherCosts += (cost.otherCosts || 0);
+    acc[monthKey].otherCosts += ((cost.otherCosts || 0) + (cost.rent || 0) + (cost.utilities || 0) + (cost.bankLoan || 0) + (cost.taxes || 0) + (cost.vat || 0));
     return acc;
   }, {});
 

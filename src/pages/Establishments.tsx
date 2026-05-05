@@ -84,10 +84,10 @@ export function Establishments() {
           city,
           postalCode,
           vatNumber: vatNumber || null,
-          surface: surface || null,
-          capacity: capacity || null,
-          latitude: latitude || null,
-          longitude: longitude || null,
+          surface: surface ?? null,
+          capacity: capacity ?? null,
+          latitude: latitude ?? null,
+          longitude: longitude ?? null,
           updatedAt: serverTimestamp()
         });
       } else {
@@ -97,10 +97,10 @@ export function Establishments() {
           city,
           postalCode,
           vatNumber: vatNumber || null,
-          surface: surface || null,
-          capacity: capacity || null,
-          latitude: latitude || null,
-          longitude: longitude || null,
+          surface: surface ?? null,
+          capacity: capacity ?? null,
+          latitude: latitude ?? null,
+          longitude: longitude ?? null,
           createdBy: userProfile.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
@@ -401,7 +401,7 @@ export function Establishments() {
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Surface (m²)</label>
                   <input
                     type="number"
-                    value={surface || ''}
+                    value={surface === undefined || surface === null ? '' : surface}
                     onChange={(e) => setSurface(e.target.value ? parseFloat(e.target.value) : undefined)}
                     className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="Ex: 85"
@@ -411,8 +411,8 @@ export function Establishments() {
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Capacité (Sièges)</label>
                   <input
                     type="number"
-                    value={capacity || ''}
-                    onChange={(e) => setCapacity(e.target.value ? parseInt(e.target.value) : undefined)}
+                    value={capacity === undefined || capacity === null ? '' : capacity}
+                    onChange={(e) => setCapacity(e.target.value ? parseInt(e.target.value, 10) : undefined)}
                     className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="Ex: 40"
                   />

@@ -60,12 +60,14 @@ service cloud.firestore {
     }
     
     function isValidEstablishment(data) {
-      return hasOnlyAllowedFields(['name', 'address', 'city', 'postalCode', 'vatNumber', 'latitude', 'longitude', 'createdBy', 'createdAt', 'updatedAt']) &&
+      return hasOnlyAllowedFields(['name', 'address', 'city', 'postalCode', 'vatNumber', 'surface', 'capacity', 'latitude', 'longitude', 'createdBy', 'createdAt', 'updatedAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              (!('address' in data) || (data.address is string && data.address.size() <= 200)) &&
              (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
              (!('postalCode' in data) || (data.postalCode is string && data.postalCode.size() <= 20)) &&
              (!('vatNumber' in data) || data.vatNumber == null || (data.vatNumber is string && data.vatNumber.size() <= 50)) &&
+             (!('surface' in data) || data.surface == null || data.surface is number) &&
+             (!('capacity' in data) || data.capacity == null || data.capacity is number) &&
              (!('latitude' in data) || data.latitude == null || data.latitude is number) &&
              (!('longitude' in data) || data.longitude == null || data.longitude is number) &&
              (!('createdBy' in data) || (data.createdBy is string && data.createdBy.size() <= 100)) &&
@@ -116,11 +118,16 @@ service cloud.firestore {
     }
 
     function isValidCost(data) {
-      return hasOnlyAllowedFields(['establishmentId', 'month', 'laborCost', 'cogs', 'otherCosts', 'createdBy', 'createdAt', 'updatedAt']) &&
+      return hasOnlyAllowedFields(['establishmentId', 'month', 'laborCost', 'cogs', 'rent', 'utilities', 'bankLoan', 'taxes', 'vat', 'otherCosts', 'createdBy', 'createdAt', 'updatedAt']) &&
              data.establishmentId is string && data.establishmentId.size() > 0 &&
              data.month is string && data.month.matches("^\\d{4}-\\d{2}$") &&
              data.laborCost is number && data.laborCost >= 0 &&
              data.cogs is number && data.cogs >= 0 &&
+             (!('rent' in data) || data.rent == null || data.rent is number) &&
+             (!('utilities' in data) || data.utilities == null || data.utilities is number) &&
+             (!('bankLoan' in data) || data.bankLoan == null || data.bankLoan is number) &&
+             (!('taxes' in data) || data.taxes == null || data.taxes is number) &&
+             (!('vat' in data) || data.vat == null || data.vat is number) &&
              (!('otherCosts' in data) || data.otherCosts == null || data.otherCosts is number) &&
              data.createdBy is string && data.createdBy == request.auth.uid &&
              data.createdAt is timestamp &&

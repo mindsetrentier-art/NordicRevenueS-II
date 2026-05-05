@@ -187,12 +187,14 @@ export function Reports() {
     const saved = localStorage.getItem('reportsVisibleColumns');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Force cbContactless to be true since we just added it and there is no UI to toggle it yet.
+        return { ...parsed, cbContactless: true };
       } catch (e) {}
     }
     return {
       cb: true,
-      cbContactless: false,
+      cbContactless: true,
       amex: true,
       amexContactless: false,
       tr: true,

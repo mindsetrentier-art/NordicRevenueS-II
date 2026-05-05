@@ -49,7 +49,7 @@ export function QuickCalculator({ onClose, onApply, initialValue = '' }: QuickCa
       const result = eval((equation + display).replace('×', '*').replace('÷', '/'));
       setDisplay(String(Number(result.toFixed(2))));
       setEquation('');
-      setIsNewNumber(true);
+      setIsNewNumber(false);
     } catch (e) {
       setDisplay('Error');
     }

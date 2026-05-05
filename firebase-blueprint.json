@@ -218,6 +218,21 @@
           "type": "number",
           "description": "Cost of Goods Sold (raw materials)"
         },
+        "rent": {
+          "type": "number"
+        },
+        "utilities": {
+          "type": "number"
+        },
+        "bankLoan": {
+          "type": "number"
+        },
+        "taxes": {
+          "type": "number"
+        },
+        "vat": {
+          "type": "number"
+        },
         "otherCosts": {
           "type": "number",
           "description": "Other fixed or variable costs"

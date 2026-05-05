@@ -101,6 +101,11 @@ export interface Cost {
   month: string; // YYYY-MM
   laborCost: number;
   cogs: number;
+  rent?: number;
+  utilities?: number;
+  bankLoan?: number;
+  taxes?: number;
+  vat?: number;
   otherCosts?: number;
   createdBy: string;
   createdAt: Date;

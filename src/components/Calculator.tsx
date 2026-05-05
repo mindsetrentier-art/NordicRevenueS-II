@@ -177,7 +177,28 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   const [position, setPosition] = useState({ x: window.innerWidth - 450, y: window.innerHeight - 550 });
   const [isDragging, setIsDragging] = useState(false);
   const [theme, setTheme] = useState<Theme>('light');
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [undoStack, setUndoStack] = useState<CalcState[]>([]);
+
+  const [mode, setMode] = useState<'standard' | 'margin'>('standard');
+  const [marginSellingPrice, setMarginSellingPrice] = useState<string>('');
+  const [marginPrimeCost, setMarginPrimeCost] = useState<string>('');
+  const [activeMarginField, setActiveMarginField] = useState<'sellingPrice' | 'primeCost'>('sellingPrice');
+
+  const themeNames: Record<Theme, string> = {
+    light: 'Clair',
+    dark: 'Sombre',
+    glass: 'Verre',
+    white: 'Blanc',
+    black: 'Noir',
+    neonPink: 'Néon Rose',
+    neonGreen: 'Néon Vert',
+    neonBlue: 'Néon Bleu',
+    neonYellow: 'Néon Jaune',
+    neonOrange: 'Néon Orange',
+    neonCyan: 'Néon Cyan',
+    neonPurple: 'Néon Violet'
+  };
   const [redoStack, setRedoStack] = useState<CalcState[]>([]);
   const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
 
@@ -292,18 +313,17 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
     };
   };
 
-  const cycleTheme = () => {
-    const themeKeys = Object.keys(themes) as Theme[];
-    let nextTheme = themeKeys[Math.floor(Math.random() * themeKeys.length)];
-    while (nextTheme === theme && themeKeys.length > 1) {
-      nextTheme = themeKeys[Math.floor(Math.random() * themeKeys.length)];
-    }
-    setTheme(nextTheme);
-  };
-
   const inputDigit = (digit: string) => {
     saveState();
     setIsDirty(true);
+    if (mode === 'margin') {
+      if (activeMarginField === 'sellingPrice') {
+        setMarginSellingPrice(prev => prev === '0' ? digit : prev + digit);
+      } else {
+        setMarginPrimeCost(prev => prev === '0' ? digit : prev + digit);
+      }
+      return;
+    }
     if (waitingForNewValue) {
       setDisplay(digit);
       setWaitingForNewValue(false);
@@ -315,6 +335,14 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   const inputDecimal = () => {
     saveState();
     setIsDirty(true);
+    if (mode === 'margin') {
+      if (activeMarginField === 'sellingPrice') {
+        setMarginSellingPrice(prev => prev.includes('.') ? prev : (prev || '0') + '.');
+      } else {
+        setMarginPrimeCost(prev => prev.includes('.') ? prev : (prev || '0') + '.');
+      }
+      return;
+    }
     if (waitingForNewValue) {
       setDisplay('0.');
       setWaitingForNewValue(false);
@@ -328,6 +356,11 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   const clear = () => {
     saveState();
     setIsDirty(true);
+    if (mode === 'margin') {
+      setMarginSellingPrice('');
+      setMarginPrimeCost('');
+      return;
+    }
     setDisplay('0');
     setPreviousValue(null);
     setOperator(null);
@@ -338,6 +371,14 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
   const backspace = () => {
     saveState();
     setIsDirty(true);
+    if (mode === 'margin') {
+      if (activeMarginField === 'sellingPrice') {
+        setMarginSellingPrice(prev => prev.slice(0, -1));
+      } else {
+        setMarginPrimeCost(prev => prev.slice(0, -1));
+      }
+      return;
+    }
     if (waitingForNewValue) return;
     setDisplay(display.length > 1 ? display.slice(0, -1) : '0');
   };
@@ -370,8 +411,14 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
       }
     }
 
-    setWaitingForNewValue(true);
-    setOperator(nextOperator);
+    if (nextOperator === '=') {
+      setWaitingForNewValue(false);
+      setOperator(null);
+      setPreviousValue(null);
+    } else {
+      setWaitingForNewValue(true);
+      setOperator(nextOperator);
+    }
   };
 
   // Keyboard support
@@ -455,6 +502,19 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
     return operator === op && waitingForNewValue ? t.btnOpActive : t.btnOp;
   };
 
+  const calculateGrossMargin = () => {
+    const sp = parseFloat(marginSellingPrice) || 0;
+    const pc = parseFloat(marginPrimeCost) || 0;
+    return (sp - pc).toFixed(2);
+  };
+
+  const calculateMarginRate = () => {
+    const sp = parseFloat(marginSellingPrice) || 0;
+    const pc = parseFloat(marginPrimeCost) || 0;
+    if (sp === 0) return '0.00';
+    return (((sp - pc) / sp) * 100).toFixed(2);
+  };
+
   return (
     <div 
       className={`fixed w-[420px] rounded-3xl overflow-hidden flex flex-row transition-colors duration-300 border ${t.container}`}
@@ -485,14 +545,32 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
           className={`px-4 py-3 border-b flex justify-between items-center cursor-move select-none transition-colors duration-300 ${t.header}`}
           onMouseDown={handleMouseDown}
         >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           <button 
-            onClick={(e) => { e.stopPropagation(); cycleTheme(); }}
-            className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+            onClick={(e) => { e.stopPropagation(); setShowThemeSelector(!showThemeSelector); }}
+            className={`p-1.5 rounded-full transition-colors ${showThemeSelector ? 'bg-black/10' : 'hover:bg-black/10'}`}
             title="Changer le thème"
           >
             <Palette size={16} />
           </button>
+          
+          {showThemeSelector && (
+            <div className="absolute top-10 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50 min-w-36 max-h-64 overflow-y-auto w-40 divide-y divide-slate-100 dark:divide-slate-700/50">
+              {(Object.keys(themes) as Theme[]).map(t => (
+                <button
+                  key={t}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTheme(t);
+                    setShowThemeSelector(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${theme === t ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300 font-medium'}`}
+                >
+                  {themeNames[t]}
+                </button>
+              ))}
+            </div>
+          )}
           
           <div className="h-4 w-px flex-shrink-0 bg-current opacity-20 mx-1"></div>
           
@@ -521,8 +599,25 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
           <X size={18} />
         </button>
       </div>
-      
+
+      {/* Mode Selector */}
+      <div className={`px-4 py-2 flex gap-2 border-b border-current opacity-90 transition-colors duration-300 ${t.header}`}>
+        <button 
+          onClick={() => setMode('standard')} 
+          className={`flex-1 py-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${mode === 'standard' ? 'bg-black/10' : 'opacity-50 hover:bg-black/5'}`}
+        >
+          Standard
+        </button>
+        <button 
+          onClick={() => setMode('margin')} 
+          className={`flex-1 py-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${mode === 'margin' ? 'bg-black/10' : 'opacity-50 hover:bg-black/5'}`}
+        >
+          Calcul Marge
+        </button>
+      </div>
+
       {/* Display */}
+      {mode === 'standard' ? (
       <div className={`relative p-6 text-right text-4xl font-light overflow-hidden text-ellipsis tracking-wider transition-colors duration-300 ${t.display}`}>
         {detectedAmount !== null && (
           <div className="absolute inset-0 bg-blue-600/90 backdrop-blur-sm flex items-center justify-between px-6 z-20 animate-in fade-in zoom-in duration-200">
@@ -561,6 +656,35 @@ export function Calculator({ onClose, activePaymentType, onPaymentTypeSelect, on
           <span className="truncate ml-4">{display}</span>
         </div>
       </div>
+      ) : (
+      <div className={`relative p-4 flex flex-col gap-3 transition-colors duration-300 ${t.display}`}>
+        <div 
+          onClick={() => setActiveMarginField('sellingPrice')}
+          className={`flex flex-col p-3 rounded-xl border-2 transition-colors cursor-text ${activeMarginField === 'sellingPrice' ? 'border-current bg-black/5' : 'border-transparent opacity-70'}`}
+        >
+          <span className="text-xs font-bold uppercase tracking-wider opacity-60 mb-1">Prix de Vente</span>
+          <span className="text-3xl font-light text-right">{marginSellingPrice || '0'} €</span>
+        </div>
+        <div 
+          onClick={() => setActiveMarginField('primeCost')}
+          className={`flex flex-col p-3 rounded-xl border-2 transition-colors cursor-text ${activeMarginField === 'primeCost' ? 'border-current bg-black/5' : 'border-transparent opacity-70'}`}
+        >
+          <span className="text-xs font-bold uppercase tracking-wider opacity-60 mb-1">Prime Cost</span>
+          <span className="text-3xl font-light text-right">{marginPrimeCost || '0'} €</span>
+        </div>
+        
+        <div className="pt-3 mt-1 border-t border-current/20 flex flex-col gap-2">
+          <div className="flex justify-between items-center px-3">
+             <span className="text-xs font-bold uppercase tracking-wider opacity-80">Marge Brute</span>
+             <span className="text-xl font-bold">{calculateGrossMargin()} €</span>
+          </div>
+          <div className="flex justify-between items-center px-3">
+             <span className="text-xs font-bold uppercase tracking-wider opacity-80">Taux de Marge</span>
+             <span className="text-xl font-bold shrink-0 text-right">{calculateMarginRate()} %</span>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* History */}
       {history.length > 0 && (

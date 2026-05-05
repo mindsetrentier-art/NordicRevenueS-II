@@ -15,7 +15,7 @@ export function Settings() {
   const [users, setUsers] = useState<User[]>([]);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'users'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'integrations'>('profile');
   
   // Edit Profile State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -236,6 +236,17 @@ export function Settings() {
             {t('settings.users')}
           </button>
         )}
+        <button
+          onClick={() => setActiveTab('integrations')}
+          className={clsx(
+            "px-6 py-3 font-semibold text-sm transition-colors border-b-2",
+            activeTab === 'integrations' 
+              ? "border-blue-600 text-blue-600" 
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          )}
+        >
+          Intégrations
+        </button>
       </div>
 
       {/* Profile Tab */}
@@ -443,6 +454,59 @@ export function Settings() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Integrations Tab */}
+      {activeTab === 'integrations' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden max-w-4xl">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Globe size={20} className="text-blue-600" /> Smart Sync POS
+              </h2>
+              <p className="text-slate-500 text-sm mt-1">Connectez votre logiciel de caisse pour une synchronisation automatique et nocturne du chiffre d'affaires.</p>
+            </div>
+            <div className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">
+              Nouveau
+            </div>
+          </div>
+          
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { name: 'Lightspeed', description: 'Synchronisation CA et modes de paiement', icon: '💰', color: 'bg-red-50 text-red-600 border-red-200', connected: false },
+                { name: 'Zettle', description: 'Import transactionnel journalier', icon: '💳', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', connected: true },
+                { name: 'Square', description: 'API complète (ventes, tva, paiements) ', icon: '⬛', color: 'bg-slate-100 text-slate-800 border-slate-300', connected: false },
+                { name: 'Zelty', description: 'Restaurateurs connectés', icon: '🍔', color: 'bg-orange-50 text-orange-600 border-orange-200', connected: false },
+                { name: 'Popina', description: 'Caisse iPad', icon: '📱', color: 'bg-blue-50 text-blue-600 border-blue-200', connected: false },
+                { name: 'Addition', description: 'Lien API', icon: '🧾', color: 'bg-purple-50 text-purple-600 border-purple-200', connected: false }
+              ].map(pos => (
+                <div key={pos.name} className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all group">
+                  <div className="flex items-center gap-4">
+                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border ${pos.color}`}>
+                       {pos.icon}
+                     </div>
+                     <div>
+                       <h3 className="font-bold text-slate-900">{pos.name}</h3>
+                       <p className="text-xs text-slate-500">{pos.description}</p>
+                     </div>
+                  </div>
+                  <div>
+                    {pos.connected ? (
+                      <button className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors">
+                        <Check size={14} /> Connecté
+                      </button>
+                    ) : (
+                      <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 font-bold text-xs rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
+                        Connecter
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

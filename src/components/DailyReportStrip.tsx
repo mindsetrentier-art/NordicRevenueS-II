@@ -19,7 +19,8 @@ import {
   Coffee,
   Moon,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wifi
 } from 'lucide-react';
 import { getWeatherIcon } from '../utils/weather';
 import clsx from 'clsx';
@@ -155,6 +156,12 @@ export function DailyReportStrip({ chartData, weatherData }: DailyReportStripPro
                   <CreditCard size={12} className="text-blue-500" />
                   <span className="text-[10px] font-black text-slate-700 whitespace-nowrap">CB: {day.cb.toLocaleString('fr-FR')}€</span>
                 </div>
+                {day.cbsc !== undefined && day.cbsc > 0 && (
+                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
+                    <Wifi size={12} className="text-teal-500" />
+                    <span className="text-[10px] font-black text-slate-700 whitespace-nowrap">CBSC: {day.cbsc.toLocaleString('fr-FR')}€</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
                   <Banknote size={12} className="text-emerald-500" />
                   <span className="text-[10px] font-black text-slate-700 whitespace-nowrap">Cash: {day.cash.toLocaleString('fr-FR')}€</span>

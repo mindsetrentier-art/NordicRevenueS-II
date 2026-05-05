@@ -30,7 +30,8 @@ import {
   AlertCircle,
   MapPin,
   Loader2,
-  Sparkles
+  Sparkles,
+  Cloud
 } from 'lucide-react';
 import { format } from 'date-fns';
 import clsx from 'clsx';
@@ -381,7 +382,19 @@ export function RevenueEntry() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saisie des Recettes</h1>
           <p className="text-slate-500 text-sm mt-1">Enregistrez les encaissements pour les services du midi et du soir.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              // Mock Smart Sync
+              alert("Synchronisation en cours depuis 'Zettle'...\nLe CA de la journée et sa ventilation seront importés automatiquement.");
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+          >
+            <Cloud size={18} />
+            <span className="hidden sm:inline">Smart Sync (POS)</span>
+          </button>
+          
           <button
             type="button"
             onClick={() => setIsRushMode(!isRushMode)}
