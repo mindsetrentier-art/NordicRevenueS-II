@@ -27,25 +27,53 @@ export const fetchHistoricalWeather = async (startDate: string, endDate: string)
   try {
     let lat = 48.8566; // Defaults to Paris if geo fails
     let lon = 2.3522;
-    try {
-      if (navigator.geolocation) {
-        const pos = await new Promise<GeolocationPosition>((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
-        lat = pos.coords.latitude;
-        lon = pos.coords.longitude;
-      }
-    } catch(e) {}
-
-    // Try forecast API first (covers up to 3 months past and future)
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=weathercode,temperature_2m_max&timezone=auto`);
-    if (!res.ok) throw new Error("Erreur réseau (forecast)");
-    let data = await res.json();
     
-    // Fallback to archive if it fails (e.g., date too old)
-    if (data && data.error) {
-      const archiveRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=weathercode,temperature_2m_max&timezone=auto`);
-      if (!archiveRes.ok) throw new Error("Erreur réseau (archive)");
-      data = await archiveRes.json();
+    try {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        const pos = await new Promise<GeolocationPosition>((res, rej) => 
+          navigator.geolocation.getCurrentPosition(res, rej, { 
+            timeout: 3000, 
+            maximumAge: 300000 
+          })
+        );
+        if (pos && pos.coords) {
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        }
+      }
+    } catch(e) {
+      console.warn("Geolocation skipped or failed, using default coordinates", e);
     }
+
+    // Secondary validation for lat/lon
+    if (!isFinite(lat) || !isFinite(lon)) {
+      lat = 48.8566;
+      lon = 2.3522;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    
+    // Open-Meteo Forecast API only supports up to 2 days in the past.
+    // If the end date is older than 2 days ago, use the Archive API directly.
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(today.getDate() - 2);
+    
+    const useArchive = end < twoDaysAgo;
+    const baseUrl = useArchive 
+      ? "https://archive-api.open-meteo.com/v1/archive" 
+      : "https://api.open-meteo.com/v1/forecast";
+    
+    const url = `${baseUrl}?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=weathercode,temperature_2m_max&timezone=GMT`;
+    
+    const res = await fetch(url);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.reason || `Erreur réseau (${res.status})`);
+    }
+    
+    const data = await res.json();
     
     if (data && data.daily) {
       const weatherMap: Record<string, { temp: number, code: number }> = {};
@@ -57,9 +85,13 @@ export const fetchHistoricalWeather = async (startDate: string, endDate: string)
       });
       return { data: weatherMap, error: null };
     }
+    
     throw new Error("Données météo invalides");
   } catch (error) {
     console.error("Erreur météo historique:", error);
-    return { data: null, error: "Impossible de récupérer les données météorologiques." };
+    return { 
+      data: null, 
+      error: error instanceof Error ? error.message : "Impossible de récupérer les données météorologiques." 
+    };
   }
 };

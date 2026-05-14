@@ -6,10 +6,12 @@ import { useLanguage, Language } from '../contexts/LanguageContext';
 import { User, Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, Globe, HelpCircle, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 
 export function Settings() {
+  const navigate = useNavigate();
   const { userProfile, updateUserProfile } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
@@ -363,6 +365,28 @@ export function Settings() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Help Section */}
+            <div className="pt-8 border-t border-slate-100 mt-4">
+              <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-3xl p-6 text-white relative overflow-hidden shadow-xl shadow-blue-200">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-12 translate-x-12 blur-2xl" />
+                <div className="relative z-10 flex flex-col sm:flex-row items-center gap-6">
+                  <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-md shrink-0">
+                    <HelpCircle size={32} className="text-white" />
+                  </div>
+                  <div className="text-center sm:text-left space-y-1 flex-1">
+                    <h3 className="text-xl font-bold">Nouveau sur l'application ?</h3>
+                    <p className="text-blue-100 text-sm font-medium">Découvrez comment exploiter tout le potentiel de NordicRevenueS avec notre guide interactif.</p>
+                  </div>
+                  <button 
+                    onClick={() => navigate('/guide')}
+                    className="px-6 py-3 bg-white text-blue-700 font-black text-sm rounded-xl hover:bg-blue-50 transition-all active:scale-95 flex items-center gap-2 shrink-0"
+                  >
+                    Voir le Guide <ArrowRight size={18} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

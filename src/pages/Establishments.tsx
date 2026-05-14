@@ -25,6 +25,7 @@ export function Establishments() {
   const [vatNumber, setVatNumber] = useState('');
   const [surface, setSurface] = useState<number | undefined>();
   const [capacity, setCapacity] = useState<number | undefined>();
+  const [dailyGoal, setDailyGoal] = useState<number | undefined>();
   const [latitude, setLatitude] = useState<number | undefined>();
   const [longitude, setLongitude] = useState<number | undefined>();
   const [isGeolocating, setIsGeolocating] = useState(false);
@@ -86,6 +87,7 @@ export function Establishments() {
           vatNumber: vatNumber || null,
           surface: surface ?? null,
           capacity: capacity ?? null,
+          dailyGoal: dailyGoal ?? null,
           latitude: latitude ?? null,
           longitude: longitude ?? null,
           updatedAt: serverTimestamp()
@@ -99,6 +101,7 @@ export function Establishments() {
           vatNumber: vatNumber || null,
           surface: surface ?? null,
           capacity: capacity ?? null,
+          dailyGoal: dailyGoal ?? null,
           latitude: latitude ?? null,
           longitude: longitude ?? null,
           createdBy: userProfile.uid,
@@ -175,6 +178,7 @@ export function Establishments() {
     setVatNumber(est.vatNumber || '');
     setSurface(est.surface);
     setCapacity(est.capacity);
+    setDailyGoal(est.dailyGoal);
     setLatitude(est.latitude);
     setLongitude(est.longitude);
     setIsModalOpen(true);
@@ -189,6 +193,7 @@ export function Establishments() {
     setVatNumber('');
     setSurface(undefined);
     setCapacity(undefined);
+    setDailyGoal(undefined);
     setLatitude(undefined);
     setLongitude(undefined);
   };
@@ -283,6 +288,10 @@ export function Establishments() {
                 <div className="flex items-center gap-2">
                   <Users size={12} />
                   <span>{est.capacity || '-'} places</span>
+                </div>
+                <div className="flex items-center gap-2 col-span-2 text-blue-600 font-bold">
+                  <Plus size={12} />
+                  <span>Objectif: {est.dailyGoal ? `${est.dailyGoal.toLocaleString()} €` : '-'}</span>
                 </div>
               </div>
 
@@ -417,6 +426,18 @@ export function Establishments() {
                     placeholder="Ex: 40"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 font-bold text-blue-600">Objectif de CA journalier (€)</label>
+                <input
+                  type="number"
+                  value={dailyGoal === undefined || dailyGoal === null ? '' : dailyGoal}
+                  onChange={(e) => setDailyGoal(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  className="w-full bg-blue-50/50 border border-blue-100 text-slate-900 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-blue-300"
+                  placeholder="Ex: 5000"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Cet objectif s'affichera dans la barre de progression lors de la saisie des recettes.</p>
               </div>
 
               <div className="space-y-3">

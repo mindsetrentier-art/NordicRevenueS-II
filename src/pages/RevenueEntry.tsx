@@ -64,6 +64,20 @@ export function RevenueEntry() {
   const [notesSoir, setNotesSoir] = useState('');
   const [attachmentsMidi, setAttachmentsMidi] = useState<File[]>([]);
   const [attachmentsSoir, setAttachmentsSoir] = useState<File[]>([]);
+  const [midiPreviews, setMidiPreviews] = useState<string[]>([]);
+  const [soirPreviews, setSoirPreviews] = useState<string[]>([]);
+
+  useEffect(() => {
+    const urls = attachmentsMidi.map(file => file.type.startsWith('image/') ? URL.createObjectURL(file) : '');
+    setMidiPreviews(urls);
+    return () => urls.forEach(url => url && URL.revokeObjectURL(url));
+  }, [attachmentsMidi]);
+
+  useEffect(() => {
+    const urls = attachmentsSoir.map(file => file.type.startsWith('image/') ? URL.createObjectURL(file) : '');
+    setSoirPreviews(urls);
+    return () => urls.forEach(url => url && URL.revokeObjectURL(url));
+  }, [attachmentsSoir]);
 
   const [activeMethods, setActiveMethods] = useState<Record<keyof Payments, boolean>>(() => {
     const saved = localStorage.getItem('activePaymentMethods');
@@ -95,6 +109,122 @@ export function RevenueEntry() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const currentDraftKey = useRef<string>('');
+
+  const [isSmartVoiceActive, setIsSmartVoiceActive] = useState(false);
+  const [smartVoiceTranscript, setSmartVoiceTranscript] = useState('');
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+
+  const processSmartVoice = async (transcript: string) => {
+    setIsProcessingVoice(true);
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.warn("Gemini API key missing for Voice processing");
+        return;
+      }
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey });
+
+      const prompt = `
+        Tu es un assistant expert en saisie de revenus pour un restaurant. 
+        À partir de la transcription vocale suivante, extrais les montants pour chaque service (midi/soir) et chaque mode de paiement.
+        
+        Modes de paiement disponibles :
+        - cb (Carte Bancaire classique)
+        - cbContactless (CB Sans Contact)
+        - cash (Espèces)
+        - amex (American Express)
+        - amexContactless (AMEX Sans Contact)
+        - tr (Titres Restaurant papier)
+        - trContactless (TR Dématérialisé/Carte)
+        - transfer (Virement)
+
+        Transcription : "${transcript}"
+
+        Renvoie UNIQUEMENT un objet JSON avec cette structure (ne mets que les champs trouvés) :
+        {
+          "midi": { "cb": 45.50, "cash": 10 },
+          "soir": { "amex": 120.00 }
+        }
+        
+        Si l'utilisateur ne précise pas midi ou soir, suppose que c'est pour le service actif actuel (isMidiActive=${isMidiActive ? 'OUI' : 'NON'}, isSoirActive=${isSoirActive ? 'OUI' : 'NON'}).
+        Réponds uniquement en JSON.
+      `;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+
+      const text = response.text || '';
+      const jsonMatch = text.match(/\{.*\}/s);
+      
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        if (data.midi) {
+          setPaymentsMidi(prev => ({ ...prev, ...data.midi }));
+          if (!isMidiActive) setIsMidiActive(true);
+        }
+        if (data.soir) {
+          setPaymentsSoir(prev => ({ ...prev, ...data.soir }));
+          if (!isSoirActive) setIsSoirActive(true);
+        }
+      }
+    } catch (err) {
+      console.error("Smart Voice Processing Error:", err);
+    } finally {
+      setIsProcessingVoice(false);
+      setIsSmartVoiceActive(false);
+      setSmartVoiceTranscript('');
+    }
+  };
+
+  const toggleSmartVoice = () => {
+    if (isSmartVoiceActive) {
+      setIsSmartVoiceActive(false);
+      return;
+    }
+
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setIsSmartVoiceActive(true);
+      setSmartVoiceTranscript('');
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0])
+        .map((result) => result.transcript)
+        .join('');
+      setSmartVoiceTranscript(transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsSmartVoiceActive(false);
+    };
+
+    recognition.onend = () => {
+      if (smartVoiceTranscript.trim()) {
+        processSmartVoice(smartVoiceTranscript);
+      } else {
+        setIsSmartVoiceActive(false);
+      }
+    };
+
+    recognition.start();
+  };
 
   useEffect(() => {
     if (!selectedEst || !date) return;
@@ -281,6 +411,8 @@ export function RevenueEntry() {
   const totalMidi = isMidiActive ? Object.values(paymentsMidi).reduce((sum, val) => sum + val, 0) : 0;
   const totalSoir = isSoirActive ? Object.values(paymentsSoir).reduce((sum, val) => sum + val, 0) : 0;
   const totalJournee = totalMidi + totalSoir;
+  const currentEst = establishments.find(e => e.id === selectedEst);
+  const dailyGoal = currentEst?.dailyGoal || 5000;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -377,12 +509,63 @@ export function RevenueEntry() {
 
   return (
     <div className="max-w-5xl mx-auto relative">
+      {/* Smart Voice Overlay */}
+      {isSmartVoiceActive && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6 relative">
+              <div className="absolute inset-0 bg-blue-500/20 rounded-full animate-ping" />
+              <Mic size={40} className="text-blue-600 relative z-10" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 mb-2 italic">Dites les montants...</h2>
+            <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+              Exemple : "Midi CB 45 euros 20, Espèces 10. Soir AMEX 300 euros".
+            </p>
+            <div className="w-full min-h-[80px] bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-center text-lg font-bold text-slate-700 italic">
+              {smartVoiceTranscript || 'Écoute en cours...'}
+            </div>
+            <button 
+              onClick={() => setIsSmartVoiceActive(false)}
+              className="mt-8 px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-colors"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Processing Voice Loader */}
+      {isProcessingVoice && (
+        <div className="fixed top-24 right-8 z-[90] flex items-center gap-3 bg-white px-4 py-3 rounded-2xl shadow-xl border border-blue-50 animate-in slide-in-from-right-8 duration-500">
+          <div className="relative">
+            <div className="absolute inset-0 bg-blue-500/20 rounded-full animate-ping" />
+            <Sparkles size={20} className="text-blue-600 relative z-10" />
+          </div>
+          <span className="text-sm font-black text-slate-900 italic">Apollo analyse votre voix...</span>
+        </div>
+      )}
+
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saisie des Recettes</h1>
           <p className="text-slate-500 text-sm mt-1">Enregistrez les encaissements pour les services du midi et du soir.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleSmartVoice}
+            disabled={isProcessingVoice}
+            className={clsx(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
+              isSmartVoiceActive 
+                ? "bg-red-500 text-white shadow-lg shadow-red-500/20" 
+                : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+            )}
+          >
+            {isProcessingVoice ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
+            <span className="hidden sm:inline">Dictée Intelligente</span>
+          </button>
+          
           <button
             type="button"
             onClick={() => {
@@ -432,8 +615,11 @@ export function RevenueEntry() {
           </div>
         )}
         {/* Header Config */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+             <Sparkles size={120} className="text-blue-600" />
+          </div>
+          <div className="relative z-10">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-slate-700">Établissement</label>
               <button
@@ -466,6 +652,15 @@ export function RevenueEntry() {
               onChange={setDate} 
             />
           </div>
+          <div className="md:col-span-2 pt-4 border-t border-slate-100 flex items-start gap-4">
+             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                <Sparkles size={16} />
+             </div>
+             <div className="text-xs text-slate-500 leading-relaxed font-medium">
+                <span className="font-bold text-slate-900 leading-none">Astuce Nordic IA : </span>
+                Gagnez du temps en prenant une photo de votre "Ticket Z" ou rapport de caisse fin de journée. Notre IA Gemini extraira automatiquement les montants pour chaque mode de paiement.
+             </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -480,6 +675,7 @@ export function RevenueEntry() {
             notes={notesMidi}
             setNotes={setNotesMidi}
             attachments={attachmentsMidi}
+            previews={midiPreviews}
             setAttachments={setAttachmentsMidi}
             activeMethods={activeMethods}
             onToggleMethod={handleToggleMethod}
@@ -507,6 +703,7 @@ export function RevenueEntry() {
             notes={notesSoir}
             setNotes={setNotesSoir}
             attachments={attachmentsSoir}
+            previews={soirPreviews}
             setAttachments={setAttachmentsSoir}
             activeMethods={activeMethods}
             onToggleMethod={handleToggleMethod}
@@ -532,25 +729,25 @@ export function RevenueEntry() {
               {totalJournee.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
             </p>
             
-            {/* Objectif 5000€ Progress */}
+            {/* Objectif Progress */}
             <div className="w-full">
               <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-1.5">
-                <span>Objectif 5 000 €</span>
+                <span>Objectif {dailyGoal.toLocaleString()} €</span>
                 <span className={clsx(
-                  totalJournee >= 5000 ? "text-emerald-600" : "text-blue-600"
+                  totalJournee >= dailyGoal ? "text-emerald-600" : "text-blue-600"
                 )}>
-                  {Math.min(100, (totalJournee / 5000) * 100).toFixed(0)}%
+                  {Math.min(100, (totalJournee / dailyGoal) * 100).toFixed(0)}%
                 </span>
               </div>
               <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
                 <div 
                   className={clsx(
                     "h-full rounded-full transition-all duration-700 ease-out",
-                    totalJournee >= 5000 
+                    totalJournee >= dailyGoal 
                       ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" 
                       : "bg-gradient-to-r from-blue-400 to-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                   )}
-                  style={{ width: `${Math.min((totalJournee / 5000) * 100, 100)}%` }}
+                  style={{ width: `${Math.min((totalJournee / dailyGoal) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -632,6 +829,7 @@ function ServiceSection({
   notes,
   setNotes,
   attachments,
+  previews,
   setAttachments,
   activeMethods,
   onToggleMethod,
@@ -649,6 +847,7 @@ function ServiceSection({
   notes: string;
   setNotes: React.Dispatch<React.SetStateAction<string>>;
   attachments: File[];
+  previews: string[];
   setAttachments: React.Dispatch<React.SetStateAction<File[]>>;
   activeMethods: Record<keyof Payments, boolean>;
   onToggleMethod: (field: keyof Payments) => void;
@@ -1051,7 +1250,7 @@ function ServiceSection({
         {/* Attachments */}
         <div className="pt-4 border-t border-slate-100">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3 uppercase tracking-wider">
-            <Paperclip className="text-slate-500" size={16} /> Pièces jointes
+            <Paperclip className="text-slate-500" size={16} /> Pièces jointes (Photos reçus)
           </h3>
           <div className="flex flex-col gap-3">
             {isExtracting && (
@@ -1061,26 +1260,48 @@ function ServiceSection({
                 <span className="text-sm font-semibold">L'IA Gemini analyse votre reçu...</span>
               </div>
             )}
+            
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-2">
                 {attachments.map((file, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-sm">
-                    <span className="truncate max-w-[150px]" title={file.name}>{file.name}</span>
-                    <button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500">
+                  <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                    {file.type.startsWith('image/') && previews[idx] ? (
+                      <img 
+                        src={previews[idx]} 
+                        alt={file.name} 
+                        className="w-full h-full object-cover transition-transform group-hover:scale-110" 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
+                        <FileText size={24} className="text-slate-400 mb-1" />
+                        <span className="text-[10px] text-slate-500 font-medium truncate w-full">{file.name}</span>
+                      </div>
+                    )}
+                    <button 
+                      type="button" 
+                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} 
+                      className="absolute top-1 right-1 p-1 bg-white/90 text-red-500 rounded-full shadow-sm hover:bg-red-50 transition-colors"
+                    >
                       <X size={14} />
                     </button>
+                    <div className="absolute bottom-0 inset-x-0 bg-black/50 p-1 text-center translate-y-full group-hover:translate-y-0 transition-transform">
+                      <span className="text-[10px] text-white font-medium truncate">
+                        {(file.size / 1024).toFixed(0)} KB
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+
             <div className="flex flex-col sm:flex-row gap-3">
               <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
                 <Camera size={18} className="text-blue-600" /> Prendre une photo
-                <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
               </label>
               <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
                 <FileText size={18} className="text-blue-600" /> Ajouter un document
-                <input type="file" accept="image/*,video/*,application/pdf" multiple className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
+                <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
               </label>
             </div>
           </div>

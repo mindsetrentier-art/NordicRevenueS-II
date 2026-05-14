@@ -38,7 +38,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { format, subDays, isSameDay, differenceInDays, parseISO } from 'date-fns';
+import { format, subDays, isSameDay, differenceInDays, parseISO, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import clsx from 'clsx';
 import { AIInsights } from '../components/AIInsights';
@@ -345,22 +345,39 @@ export function Dashboard() {
         const startMonth = format(parseISO(startDate), 'yyyy-MM');
         const endMonth = format(parseISO(endDate), 'yyyy-MM');
         
-        const targetEstId = selectedEst === 'all' ? estData[0]?.id : selectedEst;
+        let costsData: Cost[] = [];
         
-        if (targetEstId) {
+        if (selectedEst === 'all') {
+          const estIds = estData.map(e => e.id).filter(id => id !== undefined && id !== null);
+          if (estIds.length > 0) {
+            const promises = estIds.map(id => 
+              getDocs(query(
+                collection(db, 'costs'),
+                where('establishmentId', '==', id),
+                where('month', '>=', startMonth),
+                where('month', '<=', endMonth)
+              ))
+            );
+            const snaps = await Promise.all(promises);
+            snaps.forEach(snap => {
+              snap.docs.forEach(doc => {
+                costsData.push({ id: doc.id, ...doc.data() } as Cost);
+              });
+            });
+          }
+        } else {
           const costsQuery = query(
             collection(db, 'costs'),
-            where('establishmentId', '==', targetEstId),
+            where('establishmentId', '==', selectedEst),
             where('month', '>=', startMonth),
             where('month', '<=', endMonth)
           );
           
           const costsSnapshot = await getDocs(costsQuery);
-          const costsData = costsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cost));
-          setCosts(costsData);
-        } else {
-          setCosts([]);
+          costsData = costsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cost));
         }
+        
+        setCosts(costsData);
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'revenues');
       } finally {
@@ -505,6 +522,35 @@ export function Dashboard() {
     ? chartData.reduce((max, r) => max.total > r.total ? max : r)
     : null;
 
+  // Today's revenue and goal
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayRevenue = revenues.filter(r => {
+    const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
+    const matchService = selectedService === 'all' || r.service === selectedService;
+    return r.date === todayStr && matchEst && matchService;
+  }).reduce((sum, r) => sum + r.total, 0);
+
+  const selectedEstablishment = selectedEst === 'all' ? null : establishments.find(e => e.id === selectedEst);
+  const dailyGoal = selectedEstablishment 
+    ? (selectedEstablishment.dailyGoal || 5000) 
+    : establishments.reduce((sum, e) => sum + (e.dailyGoal || 0), 0) || 5000;
+  
+  const todayProgress = Math.min(100, (todayRevenue / dailyGoal) * 100);
+
+  const todayMidi = revenues.filter(r => {
+    const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
+    return r.date === todayStr && r.service === 'midi' && matchEst;
+  }).reduce((sum, r) => sum + r.total, 0);
+
+  const todaySoir = revenues.filter(r => {
+    const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
+    return r.date === todayStr && r.service === 'soir' && matchEst;
+  }).reduce((sum, r) => sum + r.total, 0);
+
+  const todayServiceData = [
+    { name: 'Aujourd\'hui', midi: todayMidi, soir: todaySoir }
+  ];
+
   // Calculate total costs for the selected period
   const totalCostsInPeriod = costs.reduce((sum, c) => sum + c.laborCost + c.cogs + (c.otherCosts || 0) + (c.rent || 0) + (c.utilities || 0) + (c.bankLoan || 0) + (c.taxes || 0) + (c.vat || 0), 0);
   const periodMonthLabel = costs.length > 0 
@@ -556,10 +602,37 @@ export function Dashboard() {
     return false;
   });
 
-  const setQuickRange = (days: number) => {
-    setEndDate(format(new Date(), 'yyyy-MM-dd'));
-    setStartDate(format(subDays(new Date(), days - 1), 'yyyy-MM-dd'));
+  const setQuickRange = (range: '7d' | 'thisMonth' | 'lastMonth' | 'thisYear') => {
+    const today = new Date();
+    let start: Date;
+    let end: Date = today;
+
+    switch (range) {
+      case '7d':
+        start = subDays(today, 6);
+        break;
+      case 'thisMonth':
+        start = startOfMonth(today);
+        break;
+      case 'lastMonth':
+        start = startOfMonth(subMonths(today, 1));
+        end = endOfMonth(subMonths(today, 1));
+        break;
+      case 'thisYear':
+        start = startOfYear(today);
+        break;
+      default:
+        start = subDays(today, 29);
+    }
+
+    setStartDate(format(start, 'yyyy-MM-dd'));
+    setEndDate(format(end, 'yyyy-MM-dd'));
   };
+
+  const currentRangeDays = differenceInDays(new Date(endDate), new Date(startDate)) + 1;
+  const isThisMonth = startDate === format(startOfMonth(new Date()), 'yyyy-MM-dd') && endDate === format(new Date(), 'yyyy-MM-dd');
+  const isLastMonth = startDate === format(startOfMonth(subMonths(new Date(), 1)), 'yyyy-MM-dd') && endDate === format(endOfMonth(subMonths(new Date(), 1)), 'yyyy-MM-dd');
+  const isThisYear = startDate === format(startOfYear(new Date()), 'yyyy-MM-dd') && endDate === format(new Date(), 'yyyy-MM-dd');
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
@@ -690,27 +763,122 @@ export function Dashboard() {
       {/* Bento Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 auto-rows-auto">
         
-        {/* Main KPI: Total Revenue */}
+        {/* Main KPI Grid */}
         <div id="dashboard-kpis" className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          {/* Today's Revenue Progress */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
+            className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Chiffre d'Affaires Total</p>
-                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <Banknote size={20} />
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">Total Journée</p>
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+                  <Sparkles size={16} />
                 </div>
               </div>
-              <p className="text-4xl font-black tracking-tighter text-slate-900">
+              <p className="text-2xl font-black tracking-tighter text-slate-900">
+                {todayRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              </p>
+            </div>
+            
+            <div className="mt-4">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 mb-1.5">
+                <span>Objectif {dailyGoal.toLocaleString()} €</span>
+                <span className={clsx(
+                  todayRevenue >= dailyGoal ? "text-emerald-600" : "text-blue-600"
+                )}>
+                  {todayProgress.toFixed(0)}%
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner mb-6">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${todayProgress}%` }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  className={clsx(
+                    "h-full rounded-full",
+                    todayRevenue >= dailyGoal 
+                      ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" 
+                      : "bg-gradient-to-r from-blue-400 to-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.3)]"
+                  )}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Répartition Services</p>
+                  <div className="flex gap-2">
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <span className="text-[8px] font-bold text-slate-400">MIDI</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                      <span className="text-[8px] font-bold text-slate-400">SOIR</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="h-10 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={todayServiceData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <Tooltip 
+                        cursor={{ fill: 'transparent' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-white p-3 border border-slate-200 shadow-xl rounded-xl">
+                                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Détail Services</p>
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span className="text-[10px] font-bold text-slate-600">Midi</span>
+                                    <span className="text-[10px] font-black text-amber-600">
+                                      {payload[0].value?.toLocaleString('fr-FR')} €
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span className="text-[10px] font-bold text-slate-600">Soir</span>
+                                    <span className="text-[10px] font-black text-indigo-600">
+                                      {payload[1].value?.toLocaleString('fr-FR')} €
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="midi" stackId="a" fill="#fbbf24" radius={[4, 0, 0, 4]} barSize={12} />
+                      <Bar dataKey="soir" stackId="a" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={12} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-md transition-all group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Cumul Période</p>
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <Banknote size={16} />
+                </div>
+              </div>
+              <p className="text-xl font-black tracking-tighter text-slate-900">
                 {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
               </p>
             </div>
-            <div className="mt-6 flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3">
               <TrendBadge value={revenueChange} />
-              <p className="text-xs font-medium text-slate-500">vs période précédente</p>
             </div>
           </motion.div>
 
@@ -774,12 +942,12 @@ export function Dashboard() {
               <h2 className="text-xl font-black text-slate-900 tracking-tight">Évolution du CA</h2>
               <p className="text-xs text-slate-500 font-medium mt-1">Analyse temporelle des performances</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button 
-                onClick={() => setQuickRange(7)}
+                onClick={() => setQuickRange('7d')}
                 className={clsx(
                   "px-4 py-2 text-xs font-bold rounded-xl transition-all",
-                  differenceInDays(new Date(endDate), new Date(startDate)) === 6
+                  currentRangeDays === 7 && !isThisMonth && !isLastMonth && !isThisYear
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
@@ -787,15 +955,37 @@ export function Dashboard() {
                 7J
               </button>
               <button 
-                onClick={() => setQuickRange(30)}
+                onClick={() => setQuickRange('thisMonth')}
                 className={clsx(
                   "px-4 py-2 text-xs font-bold rounded-xl transition-all",
-                  differenceInDays(new Date(endDate), new Date(startDate)) === 29
+                  isThisMonth
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
               >
-                30J
+                Mois Actuel
+              </button>
+              <button 
+                onClick={() => setQuickRange('lastMonth')}
+                className={clsx(
+                  "px-4 py-2 text-xs font-bold rounded-xl transition-all",
+                  isLastMonth
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+              >
+                Mois Dernier
+              </button>
+              <button 
+                onClick={() => setQuickRange('thisYear')}
+                className={clsx(
+                  "px-4 py-2 text-xs font-bold rounded-xl transition-all",
+                  isThisYear
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+              >
+                Année
               </button>
             </div>
           </div>

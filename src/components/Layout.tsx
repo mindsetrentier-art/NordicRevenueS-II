@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -13,7 +14,8 @@ import {
   BellRing,
   LogOut,
   Star,
-  Plus
+  Plus,
+  HelpCircle
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Logo } from './Logo';
@@ -47,13 +49,14 @@ export function Layout() {
   };
 
   const navItems = [
-    { to: '/', icon: Gauge, label: t('nav.dashboard') },
-    { to: '/entry', icon: CircleDollarSign, label: t('nav.entry') },
-    { to: '/reports', icon: LineChart, label: t('nav.reports') },
-    { to: '/establishments', icon: Building2, label: t('nav.establishments') },
-    { to: '/alerts', icon: BellRing, label: t('nav.alerts') },
-    { to: '/reviews', icon: Star, label: t('nav.reviews') },
-    { to: '/settings', icon: SlidersHorizontal, label: t('nav.settings') },
+    { to: '/', icon: Gauge, label: t('nav.dashboard'), shortLabel: 'Flash' },
+    { to: '/entry', icon: CircleDollarSign, label: t('nav.entry'), shortLabel: 'Caisse' },
+    { to: '/reports', icon: LineChart, label: t('nav.reports'), shortLabel: 'Rapports' },
+    { to: '/establishments', icon: Building2, label: t('nav.establishments'), shortLabel: 'Sites' },
+    { to: '/alerts', icon: BellRing, label: t('nav.alerts'), shortLabel: 'Alertes' },
+    { to: '/reviews', icon: Star, label: t('nav.reviews'), shortLabel: 'Avis' },
+    { to: '/guide', icon: HelpCircle, label: 'Guide & Aide', shortLabel: 'Guide' },
+    { to: '/settings', icon: SlidersHorizontal, label: t('nav.settings'), shortLabel: 'Params' },
   ];
 
   return (
@@ -172,30 +175,39 @@ export function Layout() {
         <Plus size={28} />
       </button>
 
-      {/* Bottom Navigation (Mobile only) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1 z-50 flex items-center overflow-x-auto no-scrollbar gap-1 shadow-[0_-8px_30px_rgb(0,0,0,0.08)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {/* Bottom Navigation (Mobile only) - Optimized for Reach and Clarity */}
+      <nav className="lg:hidden fixed bottom-5 left-4 right-4 h-16 bg-white/90 backdrop-blur-2xl border border-slate-200/60 p-1.5 rounded-[2rem] z-50 flex items-center overflow-x-auto no-scrollbar gap-1 shadow-[0_15px_50px_-12px_rgba(0,0,0,0.15)] ring-1 ring-slate-900/5">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            className="flex flex-col items-center justify-center gap-1 min-w-[4.5rem] py-2 px-1 relative group shrink-0"
+            className={({ isActive }) => clsx(
+              "flex flex-col items-center justify-center gap-1 min-w-[4rem] h-full rounded-[1.4rem] transition-all duration-300 relative shrink-0 px-2",
+              isActive 
+                ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 scale-105 z-10" 
+                : "text-slate-400 hover:bg-slate-50"
+            )}
           >
             {({ isActive }) => (
               <>
-                <div className={clsx(
-                  "flex items-center justify-center w-14 h-8 rounded-full transition-all duration-300 relative z-10",
-                  isActive ? "bg-blue-100 text-blue-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-900"
-                )}>
-                  <item.icon size={20} className={clsx("transition-transform duration-300", isActive ? "scale-110 stroke-[2.5px]" : "active:scale-90")} />
-                </div>
+                <item.icon 
+                  size={isActive ? 20 : 18} 
+                  className={clsx(
+                    "transition-all duration-300", 
+                    isActive ? "stroke-[3px]" : "stroke-[2.2px]"
+                  )} 
+                />
                 <span className={clsx(
-                  "text-[10px] font-bold truncate w-full text-center transition-colors duration-300",
-                  isActive ? "text-blue-700" : "text-slate-500 group-hover:text-slate-900"
+                  "text-[9px] font-black uppercase tracking-[0.05em] truncate w-full text-center px-0.5",
+                  isActive ? "text-white" : "text-slate-500"
                 )}>
-                  {item.label.split(' ')[0]}
+                  {item.shortLabel}
                 </span>
                 {isActive && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-blue-600 rounded-b-full shadow-[0_2px_8px_rgba(37,99,235,0.5)]"></div>
+                  <motion.div 
+                    layoutId="activeTab"
+                    className="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"
+                  />
                 )}
               </>
             )}

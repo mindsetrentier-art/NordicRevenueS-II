@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
-import { db } from '../firebase';
-import { Revenue, Payments } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
+import { Revenue, Payments, Attachment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar, Sun, CloudRain, Cloud, Snowflake, CloudLightning, CloudFog, CloudDrizzle } from 'lucide-react';
+import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar, Sun, CloudRain, Cloud, Snowflake, CloudLightning, CloudFog, CloudDrizzle, Camera, FileText } from 'lucide-react';
 import { format, parseISO, subDays, startOfMonth, endOfMonth, subMonths, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getWeatherIcon, getWeatherLabel, fetchHistoricalWeather } from '../utils/weather';
@@ -18,6 +19,8 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<Revenue | null>(null);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [deletingRevenue, setDeletingRevenue] = useState<Revenue | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [filterPeriod, setFilterPeriod] = useState<'30days' | 'thisMonth' | 'lastMonth' | 'custom' | 'all'>('30days');
@@ -121,23 +124,44 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
     e.preventDefault();
     if (!editingRevenue) return;
     
+    setIsUploading(true);
     try {
       const total = Object.values(editingRevenue.payments).reduce((sum, val) => sum + (Number(val) || 0), 0);
       
+      let newAttachmentsUrls: Attachment[] = [];
+      if (newFiles.length > 0) {
+        for (const file of newFiles) {
+          const fileRef = ref(storage, `revenues/${establishmentId}/${editingRevenue.date}/${editingRevenue.service}/${Date.now()}_${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          newAttachmentsUrls.push({
+            url,
+            name: file.name,
+            type: file.type,
+            size: file.size
+          });
+        }
+      }
+
+      const finalAttachments = [...(editingRevenue.attachments || []), ...newAttachmentsUrls];
+
       await updateDoc(doc(db, 'revenues', editingRevenue.id), {
         date: editingRevenue.date,
         service: editingRevenue.service,
         payments: editingRevenue.payments,
         notes: editingRevenue.notes || '',
-        attachments: editingRevenue.attachments || [],
+        attachments: finalAttachments,
         total: total,
         updatedAt: new Date()
       });
       
-      setRevenues(prev => prev.map(r => r.id === editingRevenue.id ? { ...editingRevenue, total } : r));
+      setRevenues(prev => prev.map(r => r.id === editingRevenue.id ? { ...editingRevenue, attachments: finalAttachments, total } : r));
       setEditingRevenue(null);
+      setNewFiles([]);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'revenues');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -482,7 +506,7 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
               </div>
 
               {editingRevenue.attachments && editingRevenue.attachments.length > 0 && (
-                <div className="mb-8">
+                <div className="mb-6">
                   <label className="block text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                     <Paperclip size={16} className="text-slate-400" />
                     Pièces jointes existantes
@@ -528,6 +552,41 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 </div>
               )}
 
+              <div className="mb-8">
+                <label className="block text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Paperclip size={16} className="text-slate-400" />
+                  Ajouter des pièces jointes (Photos reçus)
+                </label>
+                
+                {newFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {newFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-100">
+                        <span className="truncate max-w-[150px]">{file.name}</span>
+                        <button type="button" onClick={() => setNewFiles(prev => prev.filter((_, i) => i !== idx))} className="text-blue-400 hover:text-red-500">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
+                    <Camera size={18} className="text-blue-600" /> Prendre une photo
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
+                      if (e.target.files) setNewFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                    }} />
+                  </label>
+                  <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors shadow-sm active:scale-[0.98]">
+                    <FileText size={18} className="text-blue-600" /> Ajouter un document
+                    <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => {
+                      if (e.target.files) setNewFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                    }} />
+                  </label>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between pt-6 border-t border-slate-100">
                 <div>
                   <p className="text-sm font-bold text-slate-500 uppercase">Nouveau Total</p>
@@ -545,9 +604,10 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                   </button>
                   <button
                     type="submit"
-                    className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors"
+                    disabled={isUploading}
+                    className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors disabled:opacity-50"
                   >
-                    <Save size={16} /> Mettre à jour
+                    <Save size={16} /> {isUploading ? 'Enregistrement...' : 'Mettre à jour'}
                   </button>
                 </div>
               </div>

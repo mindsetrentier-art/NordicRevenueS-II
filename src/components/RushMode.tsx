@@ -11,7 +11,8 @@ import {
   Receipt, 
   Landmark,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Mic
 } from 'lucide-react';
 import { Payments } from '../types';
 import clsx from 'clsx';
@@ -90,6 +91,36 @@ export function RushMode({
     }
   };
 
+  const [isListening, setIsListening] = useState(false);
+
+  const startListening = () => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      const numbers = transcript.match(/\d+([.,]\d+)?/g);
+      if (numbers) {
+        const val = numbers[0].replace(',', '.');
+        setInputValue(val);
+      }
+    };
+
+    recognition.start();
+  };
+
   const activeMethod = PAYMENT_METHODS.find(m => m.id === activeField)!;
 
   return (
@@ -164,9 +195,19 @@ export function RushMode({
               <span className={activeMethod.color}>{activeMethod.icon}</span>
               <span className="text-sm font-black uppercase tracking-widest">{activeMethod.label}</span>
             </div>
-            <div className="text-7xl lg:text-9xl font-black tracking-tighter text-white tabular-nums flex items-center justify-center gap-2">
+            <div className="text-7xl lg:text-9xl font-black tracking-tighter text-white tabular-nums flex items-center justify-center gap-2 relative">
               {inputValue}
               <span className="text-4xl lg:text-6xl text-slate-500">€</span>
+              
+              <button
+                onClick={startListening}
+                className={clsx(
+                  "absolute -right-16 lg:-right-24 p-4 rounded-full transition-all",
+                  isListening ? "bg-red-500 animate-pulse text-white scale-110" : "bg-white/10 text-slate-400 hover:bg-white/20"
+                )}
+              >
+                <Mic size={32} />
+              </button>
             </div>
           </div>
 

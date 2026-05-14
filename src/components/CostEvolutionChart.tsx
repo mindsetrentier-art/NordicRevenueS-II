@@ -5,6 +5,7 @@ import { Cost, Establishment } from '../types';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Calculator, PieChart } from 'lucide-react';
+import clsx from 'clsx';
 
 interface CostEvolutionChartProps {
   costs: Cost[];
@@ -13,6 +14,8 @@ interface CostEvolutionChartProps {
 }
 
 export function CostEvolutionChart({ costs, establishments, selectedEst }: CostEvolutionChartProps) {
+  const [viewType, setViewType] = React.useState<'breakdown' | 'total'>('breakdown');
+
   // Process data for the chart
   // Group by month
   const monthlyData = costs.reduce((acc: any, cost) => {
@@ -24,11 +27,14 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
         laborCost: 0,
         cogs: 0,
         otherCosts: 0,
+        total: 0,
       };
     }
+    const otherVal = ((cost.otherCosts || 0) + (cost.rent || 0) + (cost.utilities || 0) + (cost.bankLoan || 0) + (cost.taxes || 0) + (cost.vat || 0));
     acc[monthKey].laborCost += cost.laborCost;
     acc[monthKey].cogs += cost.cogs;
-    acc[monthKey].otherCosts += ((cost.otherCosts || 0) + (cost.rent || 0) + (cost.utilities || 0) + (cost.bankLoan || 0) + (cost.taxes || 0) + (cost.vat || 0));
+    acc[monthKey].otherCosts += otherVal;
+    acc[monthKey].total += (cost.laborCost + cost.cogs + otherVal);
     return acc;
   }, {});
 
@@ -40,6 +46,7 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
 
   const avgLabor = chartData.length > 0 ? totalLabor / chartData.length : 0;
   const avgCogs = chartData.length > 0 ? totalCogs / chartData.length : 0;
+  const avgTotal = chartData.length > 0 ? (totalLabor + totalCogs + totalOther) / chartData.length : 0;
   const totalCostsAll = totalLabor + totalCogs + totalOther;
 
   if (costs.length === 0) {
@@ -57,22 +64,47 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
   }
 
   return (
-    <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm overflow-hidden text-slate-900">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-rose-600 text-white rounded-2xl shadow-lg shadow-rose-600/20">
             <PieChart size={24} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Répartition & Évolution des Coûts</h2>
-            <p className="text-xs text-slate-500 font-medium">Evolution mensuelle du Prime Cost</p>
+            <h2 className="text-xl font-black tracking-tight">Analyse des Coûts</h2>
+            <p className="text-xs text-slate-500 font-medium whitespace-nowrap">Evolution mensuelle du Prime Cost</p>
           </div>
+        </div>
+
+        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 shadow-sm">
+          <button 
+            onClick={() => setViewType('breakdown')}
+            className={clsx(
+              "px-4 py-2 text-xs font-bold rounded-xl transition-all",
+              viewType === 'breakdown' 
+                ? "bg-white text-blue-600 shadow-sm" 
+                : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            Détaillé
+          </button>
+          <button 
+            onClick={() => setViewType('total')}
+            className={clsx(
+              "px-4 py-2 text-xs font-bold rounded-xl transition-all",
+              viewType === 'total' 
+                ? "bg-white text-blue-600 shadow-sm" 
+                : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            Total HT
+          </button>
         </div>
       </div>
 
       <div className="h-80 w-full mb-6">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis 
               dataKey="displayMonth" 
@@ -85,7 +117,7 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
               axisLine={false} 
               tickLine={false} 
               tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
-              tickFormatter={(value) => `${value.toLocaleString('fr-FR')} €`}
+              tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
             />
             <Tooltip
               cursor={{ fill: 'rgba(225, 29, 72, 0.05)' }}
@@ -96,29 +128,36 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
                 padding: '12px'
               }}
               labelStyle={{ fontWeight: 800, marginBottom: '8px', textTransform: 'uppercase', fontSize: '10px' }}
+              formatter={(value: number) => [`${value.toLocaleString('fr-FR')} €`]}
             />
             <Legend 
               iconType="circle"
               wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}
             />
-            <Bar dataKey="laborCost" name="Main d'œuvre" stackId="a" fill="#4f46e5" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="cogs" name="Matières (COGS)" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="otherCosts" name="Autres Charges" stackId="a" fill="#94a3b8" radius={[10, 10, 0, 0]} />
+            {viewType === 'breakdown' ? (
+              <>
+                <Bar dataKey="laborCost" name="Main d'œuvre" stackId="a" fill="#4f46e5" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="cogs" name="Matières (COGS)" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="otherCosts" name="Autres Charges" stackId="a" fill="#94a3b8" radius={[10, 10, 0, 0]} />
+              </>
+            ) : (
+              <Bar dataKey="total" name="Coûts Totaux" fill="#e11d48" radius={[10, 10, 0, 0]} />
+            )}
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-slate-50">
         <div className="p-4 bg-slate-50 rounded-2xl">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Moyenne Main d'œuvre</p>
-          <p className="text-xl font-black text-indigo-600">
-            {avgLabor.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Moyenne Mensuelle</p>
+          <p className="text-xl font-black text-rose-600">
+            {avgTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
           </p>
         </div>
         <div className="p-4 bg-slate-50 rounded-2xl">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Moyenne Matières</p>
-          <p className="text-xl font-black text-amber-600">
-            {avgCogs.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Dépense Max</p>
+          <p className="text-xl font-black text-slate-900">
+            {Math.max(...chartData.map((d: any) => d.total)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
           </p>
         </div>
         <div className="p-4 bg-slate-50 rounded-2xl">
@@ -129,5 +168,6 @@ export function CostEvolutionChart({ costs, establishments, selectedEst }: CostE
         </div>
       </div>
     </div>
+
   );
 }

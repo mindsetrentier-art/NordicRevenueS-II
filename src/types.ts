@@ -20,6 +20,7 @@ export interface Establishment {
   longitude?: number;
   surface?: number;
   capacity?: number;
+  dailyGoal?: number;
   createdBy?: string;
   createdAt: Date;
   updatedAt?: Date;

@@ -162,6 +162,27 @@ const CustomBarTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const SortableHeader = ({ label, field, currentSort, order, onSort, align = 'left' }: { label: string, field: string, currentSort: string, order: 'asc' | 'desc', onSort: (field: string) => void, align?: 'left' | 'right' }) => {
+  const isActive = currentSort === field;
+  return (
+    <th 
+      className={`py-4 px-4 cursor-pointer group transition-colors hover:bg-slate-100 ${isActive ? 'bg-slate-100/50' : ''}`}
+      onClick={() => onSort(field)}
+    >
+      <div className={`flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+        <span className={`transition-colors ${isActive ? 'text-blue-600 font-black' : 'group-hover:text-slate-900'}`}>{label}</span>
+        <div className={`transition-all ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          {isActive ? (
+            order === 'asc' ? <TrendingUp size={12} className="text-blue-600" /> : <TrendingDown size={12} className="text-blue-600" />
+          ) : (
+            <ArrowUpDown size={12} className="text-slate-300" />
+          )}
+        </div>
+      </div>
+    </th>
+  );
+};
+
 export function Reports() {
   const { userProfile } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
@@ -172,9 +193,19 @@ export function Reports() {
   const [showDetailedTable, setShowDetailedTable] = useState(false);
   const [startDate, setStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [compareMode, setCompareMode] = useState<'none' | 'previous_period' | 'previous_year'>('none');
+  const [compStartDate, setCompStartDate] = useState<string>(format(subDays(subDays(new Date(), 30), 30), 'yyyy-MM-dd'));
+  const [compEndDate, setCompEndDate] = useState<string>(format(subDays(new Date(), 31), 'yyyy-MM-dd'));
+  const [compareMode, setCompareMode] = useState<'none' | 'previous_period' | 'previous_year' | 'custom'>('none');
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [compRevenues, setCompRevenues] = useState<Revenue[]>([]);
+  const [appliedCompStartDate, setAppliedCompStartDate] = useState<string>(compStartDate);
+  const [appliedCompEndDate, setAppliedCompEndDate] = useState<string>(compEndDate);
+
+  const handleApplyCustomCompare = () => {
+    setAppliedCompStartDate(compStartDate);
+    setAppliedCompEndDate(compEndDate);
+    setCompareMode('custom');
+  };
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -266,8 +297,12 @@ export function Reports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<AlertRule[]>([]);
-  const [sortBy, setSortBy] = useState<'date' | 'total' | 'establishment'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'total' | 'establishment' | 'service' | 'cb' | 'amex' | 'tr' | 'cash' | 'transfer'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [tableSearchQuery, setTableSearchQuery] = useState('');
+  const [tableServiceFilter, setTableServiceFilter] = useState<'all' | 'midi' | 'soir'>('all');
+  const [tablePaymentTypeFilter, setTablePaymentTypeFilter] = useState<string>('all');
+  const [showTableFilters, setShowTableFilters] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('reportsVisibleColumns', JSON.stringify(visibleColumns));
@@ -422,20 +457,23 @@ export function Reports() {
 
         let compFilteredData: Revenue[] = [];
         if (compareMode !== 'none') {
-          let compStartDate = '';
-          let compEndDate = '';
+          let calculatedCompStart = '';
+          let calculatedCompEnd = '';
           
           if (compareMode === 'previous_period') {
             const daysDiff = differenceInDays(parseISO(endDate), parseISO(startDate));
-            compEndDate = format(subDays(parseISO(startDate), 1), 'yyyy-MM-dd');
-            compStartDate = format(subDays(parseISO(compEndDate), daysDiff), 'yyyy-MM-dd');
+            calculatedCompEnd = format(subDays(parseISO(startDate), 1), 'yyyy-MM-dd');
+            calculatedCompStart = format(subDays(parseISO(calculatedCompEnd), daysDiff), 'yyyy-MM-dd');
           } else if (compareMode === 'previous_year') {
-            compStartDate = format(subYears(parseISO(startDate), 1), 'yyyy-MM-dd');
-            compEndDate = format(subYears(parseISO(endDate), 1), 'yyyy-MM-dd');
+            calculatedCompStart = format(subYears(parseISO(startDate), 1), 'yyyy-MM-dd');
+            calculatedCompEnd = format(subYears(parseISO(endDate), 1), 'yyyy-MM-dd');
+          } else if (compareMode === 'custom') {
+            calculatedCompStart = appliedCompStartDate;
+            calculatedCompEnd = appliedCompEndDate;
           }
 
           compFilteredData = revData.filter(rev => {
-            return rev.date >= compStartDate && rev.date <= compEndDate;
+            return rev.date >= calculatedCompStart && rev.date <= calculatedCompEnd;
           });
         }
 
@@ -452,7 +490,7 @@ export function Reports() {
     };
 
     fetchRevenues();
-  }, [userProfile, selectedEst, selectedService, startDate, endDate, establishments, compareMode]);
+  }, [userProfile, selectedEst, selectedService, startDate, endDate, establishments, compareMode, appliedCompStartDate, appliedCompEndDate]);
 
   const setQuickRange = (days: number) => {
     setEndDate(format(new Date(), 'yyyy-MM-dd'));
@@ -613,6 +651,31 @@ export function Reports() {
       console.error('Error generating image:', error);
     }
   };
+
+  const tableFilteredRevenues = revenues.filter(rev => {
+    // Basic global search
+    if (searchQuery && !establishments.find(e => e.id === rev.establishmentId)?.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    // Advanced Table Filters
+    if (tableSearchQuery && !establishments.find(e => e.id === rev.establishmentId)?.name.toLowerCase().includes(tableSearchQuery.toLowerCase())) {
+      return false;
+    }
+    if (tableServiceFilter !== 'all' && rev.service !== tableServiceFilter) {
+      return false;
+    }
+    if (tablePaymentTypeFilter !== 'all') {
+      const p = rev.payments;
+      const t = tablePaymentTypeFilter;
+      if (t === 'cb' && (p.cb + p.cbContactless) === 0) return false;
+      if (t === 'amex' && (p.amex + p.amexContactless) === 0) return false;
+      if (t === 'tr' && (p.tr + p.trContactless) === 0) return false;
+      if (t === 'cash' && p.cash === 0) return false;
+      if (t === 'transfer' && p.transfer === 0) return false;
+    }
+    return true;
+  });
 
   const filteredRevenues = revenues.filter(rev => {
     if (!searchQuery) return true;
@@ -868,6 +931,24 @@ export function Reports() {
           const compDateStr = format(subYears(intervalDate, 1), 'yyyy-MM-dd');
           compPeriodRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
         }
+      } else if (compareMode === 'custom') {
+        if (period === 'monthly') {
+          const compStart = parseISO(appliedCompStartDate);
+          const compEnd = parseISO(appliedCompEndDate);
+          const compMonths = eachMonthOfInterval({ start: compStart, end: compEnd });
+          if (compMonths[index]) {
+            const compMonthStr = format(compMonths[index], 'yyyy-MM');
+            compPeriodRevs = filteredCompRevenues.filter(r => r.date.startsWith(compMonthStr));
+          }
+        } else {
+          const compStart = parseISO(appliedCompStartDate);
+          const compEnd = parseISO(appliedCompEndDate);
+          const compDays = eachDayOfInterval({ start: compStart, end: compEnd });
+          if (compDays[index]) {
+            const compDateStr = format(compDays[index], 'yyyy-MM-dd');
+            compPeriodRevs = filteredCompRevenues.filter(r => r.date === compDateStr);
+          }
+        }
       }
       
       compHasEntries = compPeriodRevs.length > 0;
@@ -964,7 +1045,6 @@ export function Reports() {
   });
 
   // Calculate average revenue by day of week
-  const dayOfWeekNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
   const dayOfWeekData = [
     { day: 'Lun', total: 0, count: 0, index: 1 },
     { day: 'Mar', total: 0, count: 0, index: 2 },
@@ -975,24 +1055,36 @@ export function Reports() {
     { day: 'Dim', total: 0, count: 0, index: 0 },
   ];
 
+  // Aggregate by day first to handle MIDI/SOIR services correctly
+  const aggregatedByDay: { [key: string]: { total: number, dayIdx: number } } = {};
+  
   filteredRevenues.forEach(rev => {
-    const date = parseISO(rev.date);
-    if (!isNaN(date.getTime())) {
-      const dayIdx = date.getDay();
-      const target = dayOfWeekData.find(d => d.index === dayIdx);
-      if (target) {
-        target.total += rev.total;
-        target.count += 1;
+    if (!aggregatedByDay[rev.date]) {
+      const date = parseISO(rev.date);
+      if (!isNaN(date.getTime())) {
+        aggregatedByDay[rev.date] = { total: 0, dayIdx: date.getDay() };
       }
+    }
+    if (aggregatedByDay[rev.date]) {
+      aggregatedByDay[rev.date].total += rev.total;
+    }
+  });
+
+  Object.values(aggregatedByDay).forEach(data => {
+    const target = dayOfWeekData.find(d => d.index === data.dayIdx);
+    if (target) {
+      target.total += data.total;
+      target.count += 1;
     }
   });
 
   const avgDayOfWeekData = dayOfWeekData.map(d => ({
     day: d.day,
-    avg: d.count > 0 ? d.total / d.count : 0
+    avg: d.count > 0 ? d.total / d.count : 0,
+    isWeekend: d.index === 0 || d.index === 6
   }));
 
-  const sortedRevenues = [...filteredRevenues].sort((a, b) => {
+  const sortedRevenues = [...tableFilteredRevenues].sort((a, b) => {
     let comparison = 0;
     if (sortBy === 'date') {
       comparison = a.date.localeCompare(b.date);
@@ -1002,6 +1094,20 @@ export function Reports() {
       const estA = establishments.find(e => e.id === a.establishmentId)?.name || '';
       const estB = establishments.find(e => e.id === b.establishmentId)?.name || '';
       comparison = estA.localeCompare(estB);
+    } else if (sortBy === 'service') {
+      const sA = a.service || '';
+      const sB = b.service || '';
+      comparison = sA.localeCompare(sB);
+    } else if (sortBy === 'cb') {
+      comparison = (a.payments.cb + a.payments.cbContactless) - (b.payments.cb + b.payments.cbContactless);
+    } else if (sortBy === 'amex') {
+      comparison = (a.payments.amex + a.payments.amexContactless) - (b.payments.amex + b.payments.amexContactless);
+    } else if (sortBy === 'tr') {
+      comparison = (a.payments.tr + a.payments.trContactless) - (b.payments.tr + b.payments.trContactless);
+    } else if (sortBy === 'cash') {
+      comparison = a.payments.cash - b.payments.cash;
+    } else if (sortBy === 'transfer') {
+      comparison = a.payments.transfer - b.payments.transfer;
     }
     return sortOrder === 'asc' ? comparison : -comparison;
   });
@@ -1376,6 +1482,7 @@ Généré par NordicRevenueS`;
                 <option value="none">Aucune comparaison</option>
                 <option value="previous_period">Période précédente</option>
                 <option value="previous_year">Année précédente</option>
+                <option value="custom">Période personnalisée</option>
               </select>
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                 <ChevronDown size={16} />
@@ -1450,6 +1557,46 @@ Généré par NordicRevenueS`;
               </div>
             </div>
           </div>
+
+          {compareMode === 'custom' && (
+            <div className="flex flex-col md:flex-row items-center gap-4 bg-amber-50 border border-amber-200 p-3 rounded-2xl shadow-inner w-full xl:w-auto animate-in fade-in slide-in-from-left-4 duration-300">
+              <div className="flex items-center gap-3 px-3">
+                <ArrowUpDown size={18} className="text-amber-500" />
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Comparer avec (Période Custom)</span>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="date" 
+                      value={compStartDate} 
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        setCompStartDate(newDate);
+                        if (newDate > compEndDate) setCompEndDate(newDate);
+                      }}
+                      className="text-sm font-bold text-amber-700 outline-none bg-transparent cursor-pointer hover:text-amber-600 transition-colors"
+                    />
+                    <span className="text-amber-300 font-light text-base">→</span>
+                    <input 
+                      type="date" 
+                      value={compEndDate} 
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        setCompEndDate(newDate);
+                        if (newDate < compStartDate) setCompStartDate(newDate);
+                      }}
+                      className="text-sm font-bold text-amber-700 outline-none bg-transparent cursor-pointer hover:text-amber-600 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleApplyCustomCompare}
+                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95 whitespace-nowrap"
+              >
+                Appliquer
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/50 w-full xl:w-auto">
             {[
@@ -1562,12 +1709,23 @@ Généré par NordicRevenueS`;
                 <p className="text-sm font-semibold text-slate-700">
                   Du {startDate && !isNaN(parseISO(startDate).getTime()) ? format(parseISO(startDate), 'dd/MM/yyyy') : '...'} au {endDate && !isNaN(parseISO(endDate).getTime()) ? format(parseISO(endDate), 'dd/MM/yyyy') : '...'}
                 </p>
+                {compareMode !== 'none' && (
+                  <div className="mt-2">
+                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1">Comparé à (N-1/Précédent/Custom)</p>
+                    <p className="text-xs font-semibold text-amber-700 italic">
+                      {compareMode === 'previous_period' && "Période directement précédente"}
+                      {compareMode === 'previous_year' && "Même période l'année dernière"}
+                      {compareMode === 'custom' && `Du ${format(parseISO(appliedCompStartDate), 'dd/MM/yyyy')} au ${format(parseISO(appliedCompEndDate), 'dd/MM/yyyy')}`}
+                    </p>
+                  </div>
+                )}
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Établissement</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Établissement & Service</p>
                 <p className="text-sm font-semibold text-slate-700">
                   {selectedEst === 'all' ? 'Tous les établissements' : establishments.find(e => e.id === selectedEst)?.name}
                 </p>
+                <p className="text-xs text-slate-500 mt-1 capitalize">Service: {selectedService === 'all' ? 'Tous' : selectedService}</p>
               </div>
             </div>
           </div>
@@ -1602,15 +1760,20 @@ Généré par NordicRevenueS`;
                   'bg-white border-slate-100 shadow-sm'
                 }`}>
                   <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/5 rounded-full group-hover:scale-110 transition-transform" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 relative z-10">Ce jour vs N-1</p>
-                  <div className="flex items-baseline justify-between relative z-10">
-                    <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
-                      {comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </h4>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.today.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                      {comparisons.today.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {Math.abs(comparisons.today.percent).toFixed(1)}%
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">Ce jour</p>
+                  <div className="space-y-1 relative z-10">
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
+                        {comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                      </h4>
+                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.today.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                        {comparisons.today.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {Math.abs(comparisons.today.percent).toFixed(1)}%
+                      </div>
                     </div>
+                    <p className="text-[10px] font-bold text-slate-400 italic">
+                      Précédent: {comparisons.today.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                    </p>
                   </div>
                 </div>
 
@@ -1621,15 +1784,20 @@ Généré par NordicRevenueS`;
                   'bg-white border-slate-100 shadow-sm'
                 }`}>
                   <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-indigo-500/5 rounded-full group-hover:scale-110 transition-transform" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 relative z-10">Ce mois vs N-1</p>
-                  <div className="flex items-baseline justify-between relative z-10">
-                    <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
-                      {comparisons.thisMonth.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </h4>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.thisMonth.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                      {comparisons.thisMonth.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {Math.abs(comparisons.thisMonth.percent).toFixed(1)}%
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">Ce mois</p>
+                  <div className="space-y-1 relative z-10">
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
+                        {comparisons.thisMonth.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                      </h4>
+                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.thisMonth.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                        {comparisons.thisMonth.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {Math.abs(comparisons.thisMonth.percent).toFixed(1)}%
+                      </div>
                     </div>
+                    <p className="text-[10px] font-bold text-slate-400 italic">
+                      Précédent: {comparisons.thisMonth.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                    </p>
                   </div>
                 </div>
 
@@ -1640,15 +1808,20 @@ Généré par NordicRevenueS`;
                   'bg-white border-slate-100 shadow-sm'
                 }`}>
                   <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-violet-500/5 rounded-full group-hover:scale-110 transition-transform" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 relative z-10">Cette année vs N-1</p>
-                  <div className="flex items-baseline justify-between relative z-10">
-                    <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
-                      {comparisons.thisYear.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </h4>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.thisYear.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                      {comparisons.thisYear.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {Math.abs(comparisons.thisYear.percent).toFixed(1)}%
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">Cette année</p>
+                  <div className="space-y-1 relative z-10">
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
+                        {comparisons.thisYear.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                      </h4>
+                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.thisYear.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                        {comparisons.thisYear.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {Math.abs(comparisons.thisYear.percent).toFixed(1)}%
+                      </div>
                     </div>
+                    <p className="text-[10px] font-bold text-slate-400 italic">
+                      Précédent: {comparisons.thisYear.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1661,8 +1834,8 @@ Généré par NordicRevenueS`;
               exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
               'bg-white border-slate-200 shadow-sm'
             }`}>
-              <p className="text-sm font-semibold text-slate-500 mb-1">Chiffre d'Affaires Total</p>
-              <div className="flex items-end justify-between">
+              <p className="text-sm font-semibold text-slate-500 mb-1 tracking-tight">Chiffre d'Affaires Total</p>
+              <div className="flex items-end justify-between mb-2">
                 <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>
                   {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
@@ -1677,17 +1850,22 @@ Généré par NordicRevenueS`;
                   </div>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                {compareMode !== 'none' ? `vs ${compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : 'Sur la période sélectionnée'}
-              </p>
+              <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                   {compareMode !== 'none' ? 'Précédent' : 'Période'}
+                 </p>
+                 <p className="text-xs font-black text-slate-500">
+                    {compareMode !== 'none' ? compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : 'Sélection unique'}
+                 </p>
+              </div>
             </div>
             <div className={`p-6 rounded-2xl border ${
               exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
               exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
               'bg-white border-slate-200 shadow-sm'
             }`}>
-              <p className="text-sm font-semibold text-slate-500 mb-1">Moyenne par Jour</p>
-              <div className="flex items-end justify-between">
+              <p className="text-sm font-semibold text-slate-500 mb-1 tracking-tight">Moyenne par Jour</p>
+              <div className="flex items-end justify-between mb-2">
                 <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>
                   {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
@@ -1702,9 +1880,14 @@ Généré par NordicRevenueS`;
                   </div>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                {compareMode !== 'none' ? `vs ${compAvgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}` : `Sur ${uniqueDays} jours d'activité`}
-              </p>
+              <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                   {compareMode !== 'none' ? 'Précédent' : 'Activité'}
+                 </p>
+                 <p className="text-xs font-black text-slate-500">
+                    {compareMode !== 'none' ? compAvgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : `${uniqueDays} jours`}
+                 </p>
+              </div>
             </div>
             <div className={`p-6 rounded-2xl border ${
               exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
@@ -2104,10 +2287,16 @@ Généré par NordicRevenueS`;
                     />
                     <Bar 
                       dataKey="avg" 
-                      fill="#6366f1" 
                       radius={[8, 8, 0, 0]}
                       maxBarSize={40}
-                    />
+                    >
+                      {avgDayOfWeekData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.isWeekend ? "#f43f5e" : "#6366f1"} 
+                        />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -2162,42 +2351,111 @@ Généré par NordicRevenueS`;
           </div>
 
           {/* Daily Breakdown Table */}
-          <div id="report-daily-table" className={`p-6 rounded-2xl border overflow-x-auto ${
+          <div id="report-daily-table" className={`p-6 rounded-2xl border ${
             exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
             exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
             'bg-white border-slate-200 shadow-sm'
           }`}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>
-                Détail {period === 'monthly' ? 'Mensuel' : 'Journalier'} des Paiements
-              </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className={`text-lg font-bold ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>
+                  Détail {period === 'monthly' ? 'Mensuel' : 'Journalier'} des Paiements
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">{tableFilteredRevenues.length} entrées trouvées</p>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="relative group">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                  <input 
+                    type="text"
+                    value={tableSearchQuery}
+                    onChange={(e) => setTableSearchQuery(e.target.value)}
+                    placeholder="Chercher par établissement..."
+                    className="pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-full sm:w-64 transition-all"
+                  />
+                </div>
+                <button 
+                  onClick={() => setShowTableFilters(!showTableFilters)}
+                  className={`p-2 rounded-xl border transition-all ${showTableFilters ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  title="Filtres avancés"
+                >
+                  <Filter size={18} />
+                </button>
+              </div>
             </div>
-            <div className={`overflow-auto max-h-[500px] border rounded-xl ${
+
+            {showTableFilters && (
+              <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in slide-in-from-top-2 duration-300">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Service</label>
+                  <select
+                    value={tableServiceFilter}
+                    onChange={(e) => setTableServiceFilter(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="all">Tous les services</option>
+                    <option value="midi">Midi</option>
+                    <option value="soir">Soir</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Moyen de Paiement</label>
+                  <select
+                    value={tablePaymentTypeFilter}
+                    onChange={(e) => setTablePaymentTypeFilter(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="all">Tous les paiements</option>
+                    <option value="cb">Carte Bancaire</option>
+                    <option value="amex">AMEX</option>
+                    <option value="tr">Titres Restaurant</option>
+                    <option value="cash">Espèces</option>
+                    <option value="transfer">Virement</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button 
+                    onClick={() => {
+                      setTableSearchQuery('');
+                      setTableServiceFilter('all');
+                      setTablePaymentTypeFilter('all');
+                    }}
+                    className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-4 py-2.5 rounded-lg transition-colors w-full"
+                  >
+                    Réinitialiser les filtres
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className={`overflow-auto max-h-[600px] border rounded-xl ${
               exportOptions.theme === 'minimal' ? 'border-slate-900' : 
               exportOptions.theme === 'bold' ? 'border-blue-100' : 
               'border-slate-200'
             }`}>
-              <table className="w-full text-left border-collapse min-w-[600px]">
+              <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead className={`sticky top-0 z-10 shadow-sm ${
                   exportOptions.theme === 'minimal' ? 'bg-slate-100' : 
                   exportOptions.theme === 'bold' ? 'bg-blue-50' : 
                   'bg-slate-50'
                 }`}>
-                  <tr className={`border-b text-sm ${
+                  <tr className={`border-b text-[11px] font-black uppercase tracking-widest ${
                     exportOptions.theme === 'minimal' ? 'border-slate-900 text-black' : 
                     exportOptions.theme === 'bold' ? 'border-blue-200 text-blue-900' : 
-                    'border-slate-200 text-slate-500'
+                    'border-slate-300 text-slate-500'
                   }`}>
-                    <th className="py-3 px-4 font-semibold text-left">Période</th>
-                    {visibleColumns.cb && <th className="py-3 px-4 font-semibold text-right">CB</th>}
-                    {visibleColumns.cbContactless && <th className="py-3 px-4 font-semibold text-right">CB SC</th>}
-                    {visibleColumns.amex && <th className="py-3 px-4 font-semibold text-right">AMEX</th>}
-                    {visibleColumns.amexContactless && <th className="py-3 px-4 font-semibold text-right">AMEX SC</th>}
-                    {visibleColumns.tr && <th className="py-3 px-4 font-semibold text-right">TR</th>}
-                    {visibleColumns.trContactless && <th className="py-3 px-4 font-semibold text-right">TR SC</th>}
-                    {visibleColumns.cash && <th className="py-3 px-4 font-semibold text-right">Espèces</th>}
-                    {visibleColumns.transfer && <th className="py-3 px-4 font-semibold text-right">Virement</th>}
-                    <th className="py-3 px-4 font-semibold text-right">Total</th>
+                    <SortableHeader label={showDetailedTable ? "Date/Service" : "Période"} field="date" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="left" />
+                    {showDetailedTable && <SortableHeader label="Établissement" field="establishment" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="left" />}
+                    {visibleColumns.cb && <SortableHeader label="CB" field="cb" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="right" />}
+                    {visibleColumns.cbContactless && <th className="py-4 px-4 text-right">CB SC</th>}
+                    {visibleColumns.amex && <SortableHeader label="AMEX" field="amex" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="right" />}
+                    {visibleColumns.amexContactless && <th className="py-4 px-4 text-right">AMEX SC</th>}
+                    {visibleColumns.tr && <SortableHeader label="TR" field="tr" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="right" />}
+                    {visibleColumns.trContactless && <th className="py-4 px-4 text-right">TR SC</th>}
+                    {visibleColumns.cash && <SortableHeader label="Espèces" field="cash" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="right" />}
+                    {visibleColumns.transfer && <SortableHeader label="Virement" field="transfer" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="right" />}
+                    <SortableHeader label="Total" field="total" currentSort={sortBy} order={sortOrder} onSort={(f) => { setSortBy(f as any); setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }} align="right" />
                   </tr>
                 </thead>
                 <tbody className="text-sm">
@@ -2208,19 +2466,20 @@ Généré par NordicRevenueS`;
                         <tr key={rev.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                           <td className="py-3 px-4">
                             <div className="font-medium text-slate-900">{rev.date && !isNaN(parseISO(rev.date).getTime()) ? format(parseISO(rev.date), 'dd/MM/yyyy') : rev.date}</div>
-                            <div className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">
-                              {est?.name || 'Inconnu'} • {rev.service || '-'}
+                            <div className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter capitalize py-0.5 px-1.5 bg-slate-100 rounded inline-block mt-1">
+                              {rev.service || '-'}
                             </div>
                           </td>
-                          {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.amexContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.trContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600">{rev.payments.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
-                          <td className="py-3 px-4 text-right font-bold text-slate-900">{rev.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-700">{est?.name || 'Inconnu'}</td>
+                          {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600 font-medium">{rev.payments.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-400 text-xs italic">{rev.payments.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600 font-medium">{rev.payments.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.amexContactless && <td className="py-3 px-4 text-right text-slate-400 text-xs italic">{rev.payments.amexContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.tr && <td className="py-3 px-4 text-right text-slate-600 font-medium">{rev.payments.tr.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.trContactless && <td className="py-3 px-4 text-right text-slate-400 text-xs italic">{rev.payments.trContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.cash && <td className="py-3 px-4 text-right text-slate-600 font-medium">{rev.payments.cash.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          {visibleColumns.transfer && <td className="py-3 px-4 text-right text-slate-600 font-medium">{rev.payments.transfer.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
+                          <td className="py-3 px-4 text-right font-black text-slate-900 bg-slate-50/50">{rev.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
                         </tr>
                       );
                     })
@@ -2243,7 +2502,7 @@ Généré par NordicRevenueS`;
                 </tbody>
                 <tfoot className="text-sm font-bold bg-slate-100 sticky bottom-0 z-10 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
                   <tr>
-                    <td className="py-4 px-4 text-slate-900 uppercase tracking-wider text-xs">Total Période</td>
+                    <td colSpan={showDetailedTable ? 2 : 1} className="py-4 px-4 text-slate-900 uppercase tracking-wider text-xs">Total Période</td>
                     {visibleColumns.cb && <td className="py-4 px-4 text-right text-slate-900">{cbTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     {visibleColumns.cbContactless && <td className="py-4 px-4 text-right text-slate-900">{cbContactlessTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                     {visibleColumns.amex && <td className="py-4 px-4 text-right text-slate-900">{amexTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
