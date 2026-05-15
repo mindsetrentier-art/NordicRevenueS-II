@@ -615,9 +615,11 @@ export function RevenueEntry() {
           </div>
         )}
         {/* Header Config */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-             <Sparkles size={120} className="text-blue-600" />
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 relative group">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+               <Sparkles size={120} className="text-blue-600" />
+            </div>
           </div>
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-2">
@@ -894,7 +896,7 @@ function ServiceSection({
         `;
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3-flash-preview',
           contents: [
             prompt,
             {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { format, parse } from 'date-fns';
+import { format, parse, subMonths, addMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import clsx from 'clsx';
 import 'react-day-picker/dist/style.css';
@@ -18,6 +18,15 @@ export function DatePicker({ date, onChange, className }: DatePickerProps) {
 
   // Parse YYYY-MM-DD string to Date object
   const selectedDate = date ? parse(date, 'yyyy-MM-dd', new Date()) : new Date();
+  
+  const [month, setMonth] = useState<Date>(selectedDate);
+
+  // Reset month view when opening
+  useEffect(() => {
+    if (isOpen) {
+      setMonth(selectedDate);
+    }
+  }, [isOpen, selectedDate]);
 
   // Handle outside click
   useEffect(() => {
@@ -37,6 +46,12 @@ export function DatePicker({ date, onChange, className }: DatePickerProps) {
       onChange(format(day, 'yyyy-MM-dd'));
       setIsOpen(false);
     }
+  };
+
+  const handleToday = () => {
+    const today = new Date();
+    setMonth(today);
+    handleSelect(today);
   };
 
   return (
@@ -77,11 +92,37 @@ export function DatePicker({ date, onChange, className }: DatePickerProps) {
             mode="single"
             selected={selectedDate}
             onSelect={handleSelect}
+            month={month}
+            onMonthChange={setMonth}
             locale={fr}
             showOutsideDays
             fixedWeeks
             className="select-none"
           />
+          
+          <div className="flex items-center justify-between mt-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setMonth(subMonths(month, 1))}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-900 rounded-lg transition-colors"
+            >
+              <ChevronLeft size={14} /> Mois préc.
+            </button>
+            <button
+              type="button"
+              onClick={handleToday}
+              className="px-4 py-1.5 text-xs font-black text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 rounded-lg transition-colors border border-blue-200 shadow-sm"
+            >
+              Aujourd'hui
+            </button>
+            <button
+              type="button"
+              onClick={() => setMonth(addMonths(month, 1))}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-900 rounded-lg transition-colors"
+            >
+              Mois suiv. <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       )}
     </div>

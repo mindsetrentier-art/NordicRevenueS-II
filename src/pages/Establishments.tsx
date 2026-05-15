@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Store, Plus, Edit2, Trash2, X, Check, AlertCircle, Maximize2, Users } from 'lucide-react';
+import { Store, Plus, Edit2, Trash2, X, Check, AlertCircle, Maximize2, Users, MapPin } from 'lucide-react';
 
 export function Establishments() {
   const { userProfile } = useAuth();
@@ -255,7 +255,16 @@ export function Establishments() {
                 <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
                   <Store size={24} />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative z-20">
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${est.name} ${est.address || ''} ${est.postalCode || ''} ${est.city || ''}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                    title="Voir sur la carte"
+                  >
+                    <MapPin size={16} />
+                  </a>
                   {(userProfile?.role === 'admin' || est.createdBy === userProfile?.uid) && (
                     <>
                       <button 

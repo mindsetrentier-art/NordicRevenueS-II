@@ -1730,7 +1730,7 @@ Généré par NordicRevenueS`;
             </div>
           </div>
 
-          {/* Performances Globales */}
+          {/* Performances Globales & KPIs */}
           <div id="report-comparison" className={`p-8 rounded-[2.5rem] border ${
             exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
             exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
@@ -1742,8 +1742,8 @@ Généré par NordicRevenueS`;
                   <TrendingUp size={20} />
                 </div>
                 <div>
-                  <h3 className={`text-lg font-black tracking-tight ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Performances Globales</h3>
-                  <p className="text-xs text-slate-500 font-medium">Comparaison en temps réel avec la période précédente</p>
+                  <h3 className={`text-lg font-black tracking-tight ${exportOptions.theme === 'bold' ? 'text-blue-600' : 'text-slate-900'}`}>Indicateurs Clés de Performance (KPIs)</h3>
+                  <p className="text-xs text-slate-500 font-medium">Synthèse sur la période définie</p>
                 </div>
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200/50">
@@ -1753,160 +1753,82 @@ Généré par NordicRevenueS`;
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Ce Jour */}
-                <div className={`relative overflow-hidden p-6 rounded-3xl border transition-all hover:shadow-lg group ${
+                {/* CA Total */}
+                <div className={`relative overflow-hidden p-6 rounded-3xl border transition-all hover:shadow-lg group flex flex-col justify-between ${
                   exportOptions.theme === 'minimal' ? 'bg-white border-slate-200' : 
                   exportOptions.theme === 'bold' ? 'bg-blue-50/30 border-blue-100' : 
                   'bg-white border-slate-100 shadow-sm'
                 }`}>
                   <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/5 rounded-full group-hover:scale-110 transition-transform" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">Ce jour</p>
-                  <div className="space-y-1 relative z-10">
-                    <div className="flex items-baseline justify-between">
-                      <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
-                        {comparisons.today.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                      </h4>
-                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.today.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                        {comparisons.today.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {Math.abs(comparisons.today.percent).toFixed(1)}%
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10">CA Total</p>
+                  <div className="space-y-2 relative z-10">
+                    <h4 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tighter">
+                      {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                    </h4>
+                    {compareMode !== 'none' && (
+                      <div className="flex items-center justify-between pt-2">
+                        <p className="text-xs font-bold text-slate-400">
+                          Précédent: {compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                        </p>
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${periodPercent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                          {periodPercent > 0 ? <TrendingUp size={14} /> : periodPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                          {Math.abs(periodPercent).toFixed(1)}%
+                        </div>
                       </div>
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 italic">
-                      Précédent: {comparisons.today.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Ce Mois */}
-                <div className={`relative overflow-hidden p-6 rounded-3xl border transition-all hover:shadow-lg group ${
+                {/* Moyenne Journalière */}
+                <div className={`relative overflow-hidden p-6 rounded-3xl border transition-all hover:shadow-lg group flex flex-col justify-between ${
                   exportOptions.theme === 'minimal' ? 'bg-white border-slate-200' : 
-                  exportOptions.theme === 'bold' ? 'bg-indigo-50/30 border-indigo-100' : 
+                  exportOptions.theme === 'bold' ? 'bg-amber-50/30 border-amber-100' : 
                   'bg-white border-slate-100 shadow-sm'
                 }`}>
-                  <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-indigo-500/5 rounded-full group-hover:scale-110 transition-transform" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">Ce mois</p>
-                  <div className="space-y-1 relative z-10">
-                    <div className="flex items-baseline justify-between">
-                      <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
-                        {comparisons.thisMonth.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                      </h4>
-                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.thisMonth.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                        {comparisons.thisMonth.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {Math.abs(comparisons.thisMonth.percent).toFixed(1)}%
+                  <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-amber-500/5 rounded-full group-hover:scale-110 transition-transform" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10">Moyenne Journalière</p>
+                  <div className="space-y-2 relative z-10">
+                    <h4 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tighter">
+                      {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                    </h4>
+                    {compareMode !== 'none' && (
+                      <div className="flex items-center justify-between pt-2">
+                        <p className="text-xs font-bold text-slate-400">
+                          Précédent: {compAvgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                        </p>
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${avgPercent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                          {avgPercent > 0 ? <TrendingUp size={14} /> : avgPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
+                          {Math.abs(avgPercent).toFixed(1)}%
+                        </div>
                       </div>
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 italic">
-                      Précédent: {comparisons.thisMonth.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Cette Année */}
-                <div className={`relative overflow-hidden p-6 rounded-3xl border transition-all hover:shadow-lg group ${
+                {/* Meilleure Journée ou Comparaison */}
+                <div className={`relative overflow-hidden p-6 rounded-3xl border transition-all hover:shadow-lg group flex flex-col justify-between ${
                   exportOptions.theme === 'minimal' ? 'bg-white border-slate-200' : 
-                  exportOptions.theme === 'bold' ? 'bg-violet-50/30 border-violet-100' : 
+                  exportOptions.theme === 'bold' ? 'bg-emerald-50/30 border-emerald-100' : 
                   'bg-white border-slate-100 shadow-sm'
                 }`}>
-                  <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-violet-500/5 rounded-full group-hover:scale-110 transition-transform" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">Cette année</p>
-                  <div className="space-y-1 relative z-10">
-                    <div className="flex items-baseline justify-between">
-                      <h4 className="text-3xl font-black text-slate-900 tracking-tighter">
-                        {comparisons.thisYear.current.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                      </h4>
-                      <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black ${comparisons.thisYear.percent >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
-                        {comparisons.thisYear.percent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {Math.abs(comparisons.thisYear.percent).toFixed(1)}%
+                  <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-500/5 rounded-full group-hover:scale-110 transition-transform" />
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 relative z-10">Progression Période</p>
+                  <div className="space-y-2 relative z-10">
+                    <h4 className={`text-4xl lg:text-5xl font-black tracking-tighter ${periodPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {periodPercent > 0 ? '+' : ''}{periodPercent.toFixed(1)}%
+                    </h4>
+                    <div className="flex items-center justify-between pt-2">
+                      <p className="text-xs font-bold text-slate-400">
+                        Total {compareMode !== 'none' ? 'vs précédent' : 'abs'}
+                      </p>
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-black bg-slate-100 text-slate-600">
+                        {compareMode === 'none' ? 'Aucune comp.' : 'vs ' + (compareMode === 'previous_year' ? 'Année Précédente' : 'Période Précédente')}
                       </div>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 italic">
-                      Précédent: {comparisons.thisYear.previous.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                    </p>
                   </div>
                 </div>
               </div>
             </div>
-
-          {/* KPI Summary */}
-          <div id="report-kpis" className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`p-6 rounded-2xl border ${
-              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
-              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
-              'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <p className="text-sm font-semibold text-slate-500 mb-1 tracking-tight">Chiffre d'Affaires Total</p>
-              <div className="flex items-end justify-between mb-2">
-                <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>
-                  {totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                </p>
-                {compareMode !== 'none' && (
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
-                    periodPercent > 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-emerald-100 text-emerald-700') : 
-                    periodPercent < 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-red-100 text-red-700') : 
-                    'bg-slate-200 text-slate-700'
-                  }`}>
-                    {periodPercent > 0 ? <TrendingUp size={14} /> : periodPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
-                    {Math.abs(periodPercent).toFixed(1)}%
-                  </div>
-                )}
-              </div>
-              <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
-                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                   {compareMode !== 'none' ? 'Précédent' : 'Période'}
-                 </p>
-                 <p className="text-xs font-black text-slate-500">
-                    {compareMode !== 'none' ? compTotalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : 'Sélection unique'}
-                 </p>
-              </div>
-            </div>
-            <div className={`p-6 rounded-2xl border ${
-              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
-              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
-              'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <p className="text-sm font-semibold text-slate-500 mb-1 tracking-tight">Moyenne par Jour</p>
-              <div className="flex items-end justify-between mb-2">
-                <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-slate-900'}`}>
-                  {avgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-                </p>
-                {compareMode !== 'none' && (
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
-                    avgPercent > 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-emerald-100 text-emerald-700') : 
-                    avgPercent < 0 ? (exportOptions.theme === 'minimal' ? 'bg-slate-100 text-black' : 'bg-red-100 text-red-700') : 
-                    'bg-slate-200 text-slate-700'
-                  }`}>
-                    {avgPercent > 0 ? <TrendingUp size={14} /> : avgPercent < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
-                    {Math.abs(avgPercent).toFixed(1)}%
-                  </div>
-                )}
-              </div>
-              <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
-                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                   {compareMode !== 'none' ? 'Précédent' : 'Activité'}
-                 </p>
-                 <p className="text-xs font-black text-slate-500">
-                    {compareMode !== 'none' ? compAvgRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : `${uniqueDays} jours`}
-                 </p>
-              </div>
-            </div>
-            <div className={`p-6 rounded-2xl border ${
-              exportOptions.theme === 'minimal' ? 'bg-white border-slate-900 border-2 shadow-none' : 
-              exportOptions.theme === 'bold' ? 'bg-white border-blue-600 border-2 shadow-xl shadow-blue-50' : 
-              'bg-white border-slate-200 shadow-sm'
-            }`}>
-              <p className="text-sm font-semibold text-slate-500 mb-1">Meilleure Journée</p>
-              <p className={`text-3xl font-black ${exportOptions.theme === 'minimal' ? 'text-black' : 'text-emerald-600'}`}>
-                {chartData.length > 0 
-                  ? Math.max(...chartData.map(r => r.total)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
-                  : '0,00 €'}
-              </p>
-              <p className="text-xs text-slate-400 mt-2">
-                {chartData.length > 0 
-                  ? chartData.reduce((max, r) => max.total > r.total ? max : r).date
-                  : '-'}
-              </p>
-            </div>
-          </div>
 
           {/* AI Analysis Section */}
           {(exportOptions.aiAnalysis && (aiAnalysisContent || isGeneratingAnalysis)) && (
