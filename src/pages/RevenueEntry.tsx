@@ -34,6 +34,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { Calculator } from '../components/Calculator';
 import { RushMode } from '../components/RushMode';
@@ -53,6 +54,7 @@ const INITIAL_PAYMENTS: Payments = {
 };
 
 export function RevenueEntry() {
+  const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [selectedEst, setSelectedEst] = useState<string>('');
@@ -113,6 +115,55 @@ export function RevenueEntry() {
   const [isSmartVoiceActive, setIsSmartVoiceActive] = useState(false);
   const [smartVoiceTranscript, setSmartVoiceTranscript] = useState('');
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSmartSync = async () => {
+    if (!userProfile?.posProvider) {
+      alert("Veuillez d'abord configurer un POS dans les paramètres.");
+      navigate('/settings');
+      return;
+    }
+
+    setIsSyncing(true);
+    setError(null);
+
+    // Simulate POS API Call
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Mock Data Generation
+      // In a real app, this would be a fetch to /api/pos/sync
+      const mockSyncResult: Payments = {
+        cb: Math.floor(Math.random() * 2000) + 500,
+        cbContactless: Math.floor(Math.random() * 3000) + 1000,
+        cash: Math.floor(Math.random() * 500) + 100,
+        amex: Math.floor(Math.random() * 800) + 200,
+        amexContactless: Math.floor(Math.random() * 400),
+        tr: Math.floor(Math.random() * 1000) + 300,
+        trContactless: Math.floor(Math.random() * 1500) + 500,
+        transfer: 0
+      };
+
+      // Populate based on active service
+      const currentHour = new Date().getHours();
+      if (currentHour < 17) {
+        setPaymentsMidi(mockSyncResult);
+        setIsMidiActive(true);
+        setNotesMidi(prev => `${prev}\n[Smart Sync] Importé de ${userProfile.posProvider} à ${format(new Date(), 'HH:mm')}`.trim());
+      } else {
+        setPaymentsSoir(mockSyncResult);
+        setIsSoirActive(true);
+        setNotesSoir(prev => `${prev}\n[Smart Sync] Importé de ${userProfile.posProvider} à ${format(new Date(), 'HH:mm')}`.trim());
+      }
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      setError("Erreur lors de la synchronisation avec le POS.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const processSmartVoice = async (transcript: string) => {
     setIsProcessingVoice(true);
@@ -568,14 +619,19 @@ export function RevenueEntry() {
           
           <button
             type="button"
-            onClick={() => {
-              // Mock Smart Sync
-              alert("Synchronisation en cours depuis 'Zettle'...\nLe CA de la journée et sa ventilation seront importés automatiquement.");
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+            onClick={handleSmartSync}
+            disabled={isSyncing}
+            className={clsx(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
+              userProfile?.posProvider 
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" 
+                : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600"
+            )}
           >
-            <Cloud size={18} />
-            <span className="hidden sm:inline">Smart Sync (POS)</span>
+            {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Cloud size={18} />}
+            <span className="hidden sm:inline">
+              {userProfile?.posProvider ? `Sync ${userProfile.posProvider}` : "Smart Sync (POS)"}
+            </span>
           </button>
           
           <button

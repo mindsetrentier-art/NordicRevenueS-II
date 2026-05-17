@@ -6,6 +6,7 @@ export interface User {
   displayName?: string;
   role: Role;
   establishmentIds: string[];
+  posProvider?: string;
   createdAt: Date;
 }
 

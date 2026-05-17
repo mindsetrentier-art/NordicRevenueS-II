@@ -6,7 +6,7 @@ import { useLanguage, Language } from '../contexts/LanguageContext';
 import { User, Establishment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, Globe, HelpCircle, ArrowRight } from 'lucide-react';
+import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, Globe, HelpCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 
@@ -198,6 +198,32 @@ export function Settings() {
       handleFirestoreError(error, OperationType.UPDATE, `users/${userProfile.uid}`);
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleConnectPOS = async (providerName: string) => {
+    if (!userProfile) return;
+    try {
+      await updateDoc(doc(db, 'users', userProfile.uid), {
+        posProvider: providerName,
+        updatedAt: serverTimestamp()
+      });
+      updateUserProfile({ posProvider: providerName });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userProfile.uid}/pos`);
+    }
+  };
+
+  const handleDisconnectPOS = async () => {
+    if (!userProfile) return;
+    try {
+      await updateDoc(doc(db, 'users', userProfile.uid), {
+        posProvider: null,
+        updatedAt: serverTimestamp()
+      });
+      updateUserProfile({ posProvider: undefined });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userProfile.uid}/pos`);
     }
   };
 
@@ -500,36 +526,53 @@ export function Settings() {
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { name: 'Lightspeed', description: 'Synchronisation CA et modes de paiement', icon: '💰', color: 'bg-red-50 text-red-600 border-red-200', connected: false },
-                { name: 'Zettle', description: 'Import transactionnel journalier', icon: '💳', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', connected: true },
-                { name: 'Square', description: 'API complète (ventes, tva, paiements) ', icon: '⬛', color: 'bg-slate-100 text-slate-800 border-slate-300', connected: false },
-                { name: 'Zelty', description: 'Restaurateurs connectés', icon: '🍔', color: 'bg-orange-50 text-orange-600 border-orange-200', connected: false },
-                { name: 'Popina', description: 'Caisse iPad', icon: '📱', color: 'bg-blue-50 text-blue-600 border-blue-200', connected: false },
-                { name: 'Addition', description: 'Lien API', icon: '🧾', color: 'bg-purple-50 text-purple-600 border-purple-200', connected: false }
-              ].map(pos => (
-                <div key={pos.name} className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all group">
-                  <div className="flex items-center gap-4">
-                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border ${pos.color}`}>
-                       {pos.icon}
-                     </div>
-                     <div>
-                       <h3 className="font-bold text-slate-900">{pos.name}</h3>
-                       <p className="text-xs text-slate-500">{pos.description}</p>
-                     </div>
+                { name: 'Lightspeed', description: 'Synchronisation CA et modes de paiement', icon: '💰', color: 'bg-red-50 text-red-600 border-red-200' },
+                { name: 'Zettle', description: 'Import transactionnel journalier', icon: '💳', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+                { name: 'Square', description: 'API complète (ventes, tva, paiements) ', icon: '⬛', color: 'bg-slate-100 text-slate-800 border-slate-300' },
+                { name: 'Zelty', description: 'Restaurateurs connectés', icon: '🍔', color: 'bg-orange-50 text-orange-600 border-orange-200' },
+                { name: 'Popina', description: 'Caisse iPad', icon: '📱', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+                { name: 'Addition', description: 'Lien API', icon: '🧾', color: 'bg-purple-50 text-purple-600 border-purple-200' }
+              ].map(pos => {
+                const isConnected = userProfile?.posProvider === pos.name;
+                return (
+                  <div key={pos.name} className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all group">
+                    <div className="flex items-center gap-4">
+                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border ${pos.color}`}>
+                         {pos.icon}
+                       </div>
+                       <div>
+                         <h3 className="font-bold text-slate-900">{pos.name}</h3>
+                         <p className="text-xs text-slate-500">{pos.description}</p>
+                       </div>
+                    </div>
+                    <div>
+                      {isConnected ? (
+                        <button 
+                          onClick={handleDisconnectPOS}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                        >
+                          <Check size={14} /> Connecté
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleConnectPOS(pos.name)}
+                          disabled={!!userProfile?.posProvider}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 font-bold text-xs rounded-lg border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50"
+                        >
+                          Connecter
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    {pos.connected ? (
-                      <button className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors">
-                        <Check size={14} /> Connecté
-                      </button>
-                    ) : (
-                      <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 font-bold text-xs rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
-                        Connecter
-                      </button>
-                    )}
-                  </div>
+                );
+              })}
+              {/* Note informative */}
+              <div className="md:col-span-2 bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3 mt-2">
+                <Sparkles size={18} className="text-blue-600 mt-1 shrink-0" />
+                <div className="text-sm text-blue-800 leading-relaxed">
+                  <span className="font-bold">Comment ça marche ?</span> Une fois votre logiciel de caisse connecté, un bouton <span className="font-bold underline">Smart Sync</span> apparaîtra sur votre page de saisie des revenus. En un clic, vous pourrez importer automatiquement les chiffres de la journée, ventilés par mode de paiement.
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </div>
