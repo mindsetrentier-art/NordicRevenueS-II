@@ -26,6 +26,31 @@
           },
           "description": "List of establishment IDs the user has access to"
         },
+        "posProvider": {
+          "type": "string",
+          "description": "Connected POS provider brand name"
+        },
+        "posApiKey": {
+          "type": "string",
+          "description": "API Key or Access Token for POS"
+        },
+        "posClientId": {
+          "type": "string",
+          "description": "Client ID/App ID for POS integration"
+        },
+        "posLastSyncDate": {
+          "type": "string",
+          "description": "Date of the last POS sync attempt"
+        },
+        "posLastSyncTime": {
+          "type": "string",
+          "description": "Time of the last POS sync attempt"
+        },
+        "posLastSyncStatus": {
+          "type": "string",
+          "enum": ["success", "failed"],
+          "description": "Outcome of the last POS sync attempt"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -165,7 +190,7 @@
         },
         "type": {
           "type": "string",
-          "enum": ["revenue_drop", "payment_method_change"],
+          "enum": ["revenue_drop", "payment_method_change", "pos_consecutive_failures"],
           "description": "Type of the alert"
         },
         "threshold": {
@@ -181,6 +206,22 @@
           "type": "string",
           "enum": ["daily", "weekly", "monthly"],
           "description": "Timeframe to evaluate the alert"
+        },
+        "notifyEmail": {
+          "type": "boolean",
+          "description": "Whether to notify via email"
+        },
+        "emailAddress": {
+          "type": "string",
+          "description": "Email address for notifications"
+        },
+        "notifySms": {
+          "type": "boolean",
+          "description": "Whether to notify via SMS"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Phone number for SMS notifications"
         },
         "isActive": {
           "type": "boolean",
@@ -251,6 +292,48 @@
         }
       },
       "required": ["establishmentId", "month", "laborCost", "cogs", "createdBy", "createdAt", "updatedAt"]
+    },
+    "POSSyncLog": {
+      "title": "POSSyncLog",
+      "description": "Logs tracking each Smart Sync synchronization run or attempt",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the user who triggered the sync"
+        },
+        "establishmentId": {
+          "type": "string",
+          "description": "ID of the establishmentSynced or 'all' if calculated globally"
+        },
+        "posProvider": {
+          "type": "string",
+          "description": "The name of the connected POS brand"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed"],
+          "description": "Outcome of the synchronization run"
+        },
+        "errorMessage": {
+          "type": "string",
+          "description": "Detailed developer error message if the attempt failed"
+        },
+        "service": {
+          "type": "string",
+          "description": "The service target that was synced (midi, soir or none)"
+        },
+        "totalSynced": {
+          "type": "number",
+          "description": "Total revenue registered or imported in EUR"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Exact point in time of the synchronization trigger"
+        }
+      },
+      "required": ["userId", "posProvider", "status", "timestamp"]
     }
   },
   "firestore": {
@@ -283,6 +366,12 @@
         "$ref": "#/entities/Cost"
       },
       "description": "Monthly cost records"
+    },
+    "/pos_sync_logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/POSSyncLog"
+      },
+      "description": "Smart Sync attempts history log logs"
     }
   }
 }

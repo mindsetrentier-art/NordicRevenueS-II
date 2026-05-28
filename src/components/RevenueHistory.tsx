@@ -5,7 +5,7 @@ import { db, storage } from '../firebase';
 import { Revenue, Payments, Attachment } from '../types';
 import { handleFirestoreError } from '../utils/errorHandling';
 import { OperationType } from '../types';
-import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar, Sun, CloudRain, Cloud, Snowflake, CloudLightning, CloudFog, CloudDrizzle, Camera, FileText } from 'lucide-react';
+import { Edit2, Trash2, X, Save, Paperclip, ChevronLeft, ChevronRight, Filter, Calendar, Sun, CloudRain, Cloud, Snowflake, CloudLightning, CloudFog, CloudDrizzle, Camera, FileText, HelpCircle } from 'lucide-react';
 import { format, parseISO, subDays, startOfMonth, endOfMonth, subMonths, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { getWeatherIcon, getWeatherLabel, fetchHistoricalWeather } from '../utils/weather';
@@ -449,11 +449,17 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 <div className="space-y-4">
                   <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">Cartes Bancaires</h4>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Paiement Carte</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>Paiement Carte</span>
+                      <TaxTooltip content="TVA standard par défaut (20% sur place, 10% ou 5,5% à emporter). Les commissions bancaires directes s'élèvent généralement entre 0,4% et 1,5% selon le contrat monétique." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.cb || ''} onChange={(e) => handlePaymentChange('cb', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Carte Sans Contact</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>Carte Sans Contact</span>
+                      <TaxTooltip content="Mêmes règles de TVA. Le sans contact accélère le passage, mais reste assujetti aux mêmes commissions bancaires classiques d'acquisition (0,4% à 1,5%)." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.cbContactless || ''} onChange={(e) => handlePaymentChange('cbContactless', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                 </div>
@@ -461,11 +467,17 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 <div className="space-y-4">
                   <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">American Express</h4>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Carte AMEX</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>Carte AMEX</span>
+                      <TaxTooltip content="Mêmes règles de TVA. Soumis à une commission plus élevée de l'émetteur American Express (généralement 1,5% à 3,5% HT), exonérée de TVA mais comptabilisée en charges." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.amex || ''} onChange={(e) => handlePaymentChange('amex', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">AMEX Sans Contact</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>AMEX Sans Contact</span>
+                      <TaxTooltip content="Mêmes règles de TVA. Représente les paiements mobiles/sans contact AMEX, soumis à la même tarification de commission réseau de 1,5% à 3,5% HT." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.amexContactless || ''} onChange={(e) => handlePaymentChange('amexContactless', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                 </div>
@@ -473,11 +485,17 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 <div className="space-y-4">
                   <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">Titres-Restaurant</h4>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Carte TR</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>Carte TR</span>
+                      <TaxTooltip content="La TVA collectée est calculée sur le montant total brut de la vente. Commissions émetteurs (Bimpli, Edenred, Swile, Sodexo) de 1% à 5% déductibles sur facture." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.tr || ''} onChange={(e) => handlePaymentChange('tr', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">TR Sans Contact</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>TR Sans Contact</span>
+                      <TaxTooltip content="Paiement d'un repas exonéré d'impôts et cotisations pour la part employeur (plafond légal journalier). Même calcul de TVA brute et commissions émetteurs associées." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.trContactless || ''} onChange={(e) => handlePaymentChange('trContactless', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                 </div>
@@ -485,11 +503,17 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 <div className="space-y-4">
                   <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">Autres</h4>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Espèces</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>Espèces</span>
+                      <TaxTooltip content="Pas de commissions réseau. Soumis aux déclarations de TVA obligatoires (20% / 10% / 5,5%) et à la réglementation NF525 relative au système de caisse." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.cash || ''} onChange={(e) => handlePaymentChange('cash', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Virement Bancaire</label>
+                    <label className="flex items-center text-xs text-slate-500 mb-1">
+                      <span>Virement Bancaire</span>
+                      <TaxTooltip content="TVA standard selon la facture globale. Pas de frais ou commissions de paiement. Idéal pour les prestations haut de gamme, traiteurs et événements d'entreprises." />
+                    </label>
                     <input type="number" step="0.01" min="0" value={editingRevenue.payments.transfer || ''} onChange={(e) => handlePaymentChange('transfer', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
                   </div>
                 </div>
@@ -618,3 +642,17 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
     </div>
   );
 }
+
+function TaxTooltip({ content }: { content: string }) {
+  return (
+    <span className="group relative inline-block text-slate-400 hover:text-slate-600 transition-colors cursor-help select-none pt-0.5 ml-1.5 align-middle">
+      <HelpCircle size={13} />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3.5 bg-slate-900 border border-slate-950 text-[11px] leading-relaxed text-slate-100 font-medium rounded-2xl shadow-2xl opacity-0 scale-95 origin-bottom group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-[110] select-text">
+        <span className="block text-[11px] font-bold text-blue-400 mb-1.5 font-sans">ℹ️ Infos Taxe & TVA :</span>
+        <span className="font-sans block text-slate-300 font-medium">{content}</span>
+        <span className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-slate-950" />
+      </span>
+    </span>
+  );
+}
+

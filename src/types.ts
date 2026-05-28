@@ -7,6 +7,11 @@ export interface User {
   role: Role;
   establishmentIds: string[];
   posProvider?: string;
+  posApiKey?: string;
+  posClientId?: string;
+  posLastSyncDate?: string;
+  posLastSyncTime?: string;
+  posLastSyncStatus?: 'success' | 'failed';
   createdAt: Date;
 }
 
@@ -77,7 +82,7 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export type AlertType = 'revenue_drop' | 'payment_method_change';
+export type AlertType = 'revenue_drop' | 'payment_method_change' | 'pos_consecutive_failures';
 
 export interface AlertRule {
   id: string;

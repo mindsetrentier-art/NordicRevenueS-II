@@ -387,9 +387,11 @@ export function Alerts() {
                       <div className="flex items-center gap-3">
                         <div className={clsx(
                           "p-2 rounded-xl shrink-0",
-                          alert.type === 'revenue_drop' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
+                          alert.type === 'revenue_drop' ? "bg-rose-50 text-rose-600" :
+                          alert.type === 'pos_consecutive_failures' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
                         )}>
-                          {alert.type === 'revenue_drop' ? <AlertTriangle size={16} /> : <Bell size={16} />}
+                          {alert.type === 'revenue_drop' ? <AlertTriangle size={16} /> : 
+                           alert.type === 'pos_consecutive_failures' ? <AlertCircle size={16} /> : <Bell size={16} />}
                         </div>
                         <span className="font-bold text-slate-900">{alert.name}</span>
                       </div>
@@ -397,10 +399,12 @@ export function Alerts() {
                     <td className="p-4">
                       <div className="flex flex-col">
                         <span className="font-medium text-slate-900">
-                          {alert.type === 'revenue_drop' ? 'Baisse de CA' : 'Variation Paiement'}
+                          {alert.type === 'revenue_drop' ? 'Baisse de CA' : 
+                           alert.type === 'payment_method_change' ? 'Variation Paiement' : 'Échecs de synchro caisse'}
                         </span>
-                <span className="text-xs text-slate-500">
-                          {alert.type === 'revenue_drop' ? `< ${alert.threshold} €` : `> ${alert.threshold} %`}
+                        <span className="text-xs text-slate-500">
+                          {alert.type === 'revenue_drop' ? `< ${alert.threshold} €` : 
+                           alert.type === 'payment_method_change' ? `> ${alert.threshold} %` : `≥ ${alert.threshold} échecs consécutifs`}
                           {alert.type === 'payment_method_change' && alert.paymentMethod && ` (${paymentMethodLabels[alert.paymentMethod] || alert.paymentMethod})`}
                         </span>
                         <div className="flex items-center gap-2 mt-1">
@@ -564,11 +568,23 @@ export function Alerts() {
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Type d'alerte</label>
                 <select 
                   value={type}
-                  onChange={(e) => setType(e.target.value as AlertType)}
+                  onChange={(e) => {
+                    const newType = e.target.value as AlertType;
+                    setType(newType);
+                    if (newType === 'pos_consecutive_failures') {
+                      setThreshold(3);
+                      if (!name || name === 'Alerte CA bas' || name === '') {
+                        setName('Échec consécutif Smart Sync');
+                      }
+                    } else {
+                      setThreshold('');
+                    }
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 >
                   <option value="revenue_drop">Baisse de chiffre d'affaires</option>
                   <option value="payment_method_change">Variation d'un moyen de paiement</option>
+                  <option value="pos_consecutive_failures">Échecs de synchronisation caisse consécutifs (Smart Sync)</option>
                 </select>
               </div>
 
@@ -589,21 +605,22 @@ export function Alerts() {
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  {type === 'revenue_drop' ? 'Seuil d\'alerte (en €)' : 'Variation significative (en %)'}
+                  {type === 'revenue_drop' ? 'Seuil d\'alerte (en €)' : 
+                   type === 'pos_consecutive_failures' ? 'Nombre d\'échecs consécutifs de synchronisation' : 'Variation significative (en %)'}
                 </label>
                 <div className="relative">
                   <input 
                     type="number" 
                     required
-                    min="0.01"
+                    min={type === 'pos_consecutive_failures' ? "1" : "0.01"}
                     step={type === 'revenue_drop' ? "10" : "1"}
                     value={threshold}
                     onChange={(e) => handleThresholdChange(e.target.value)}
-                    placeholder={type === 'revenue_drop' ? "Ex: 1000" : "Ex: 20"}
+                    placeholder={type === 'revenue_drop' ? "Ex: 1000" : type === 'pos_consecutive_failures' ? "Ex: 3" : "Ex: 20"}
                     className={`w-full bg-slate-50 border ${thresholdError ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-blue-500'} text-slate-900 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 outline-none`}
                   />
                   <span className={`absolute right-4 top-1/2 -translate-y-1/2 font-medium ${thresholdError ? 'text-red-400' : 'text-slate-400'}`}>
-                    {type === 'revenue_drop' ? '€' : '%'}
+                    {type === 'revenue_drop' ? '€' : type === 'pos_consecutive_failures' ? 'échecs' : '%'}
                   </span>
                 </div>
                 {thresholdError ? (
@@ -612,6 +629,8 @@ export function Alerts() {
                   <p className="text-xs text-slate-500 mt-1">
                     {type === 'revenue_drop' 
                       ? 'Vous serez alerté si le CA est inférieur à ce montant.' 
+                      : type === 'pos_consecutive_failures'
+                      ? 'Vous serez alerté de manière proactive si le Smart Sync de votre caisse se déconnecte et échoue ce nombre de fois consécutivement.'
                       : 'Vous serez alerté si l\'utilisation varie de plus de ce pourcentage (à la hausse ou à la baisse).'}
                   </p>
                 )}

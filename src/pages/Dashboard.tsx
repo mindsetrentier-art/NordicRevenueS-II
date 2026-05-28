@@ -36,7 +36,9 @@ import {
   Area,
   Legend,
   LineChart,
-  Line
+  Line,
+  PieChart,
+  Pie
 } from 'recharts';
 import { format, subDays, isSameDay, differenceInDays, parseISO, startOfMonth, endOfMonth, startOfYear, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -634,6 +636,45 @@ export function Dashboard() {
   const isLastMonth = startDate === format(startOfMonth(subMonths(new Date(), 1)), 'yyyy-MM-dd') && endDate === format(endOfMonth(subMonths(new Date(), 1)), 'yyyy-MM-dd');
   const isThisYear = startDate === format(startOfYear(new Date()), 'yyyy-MM-dd') && endDate === format(new Date(), 'yyyy-MM-dd');
 
+  const renderPOSSyncBadge = () => {
+    if (!userProfile?.posProvider) {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200/80 text-slate-500 rounded-full text-xs font-semibold select-none leading-none shrink-0">
+          <Cloud size={12} className="text-slate-400" />
+          <span>Aucun POS connecté</span>
+        </div>
+      );
+    }
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const isSyncToday = userProfile.posLastSyncDate === todayStr;
+
+    if (!isSyncToday) {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/70 border border-amber-200/70 text-amber-700 rounded-full text-xs font-semibold select-none leading-none shrink-0 shadow-sm shadow-amber-50/20">
+          <Clock size={12} className="text-amber-500" />
+          <span>{userProfile.posProvider} : Synchro requise aujourd'hui</span>
+        </div>
+      );
+    }
+
+    if (userProfile.posLastSyncStatus === 'success') {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-semibold select-none leading-none shrink-0 shadow-sm shadow-emerald-50">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>{userProfile.posProvider} : Sync OK aujourd’hui à {userProfile.posLastSyncTime}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded-full text-xs font-semibold select-none leading-none shrink-0 shadow-sm shadow-rose-50">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+        <span>{userProfile.posProvider} : Échec Sync aujourd'hui à {userProfile.posLastSyncTime}</span>
+      </div>
+    );
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
   }
@@ -642,7 +683,10 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tableau de Bord Global</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tableau de Bord Global</h1>
+            {renderPOSSyncBadge()}
+          </div>
           <p className="text-slate-500 text-sm mt-1">Aperçu de vos performances financières</p>
         </div>
         
@@ -1281,30 +1325,96 @@ export function Dashboard() {
 
         {/* Payment Methods Breakdown */}
         <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col">
-          <h2 className="text-lg font-black text-slate-900 mb-8 tracking-tight">Répartition Paiements</h2>
-          <div className="space-y-6 flex-1 flex flex-col justify-center">
+          <h2 className="text-lg font-black text-slate-900 mb-6 tracking-tight">Répartition Paiements</h2>
+          
+          {/* Animated Pie Chart Container */}
+          <div className="h-44 w-full relative flex items-center justify-center mb-6">
+            {totalPayments > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip
+                      formatter={(value: any) => [`${value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`, 'Volume']}
+                      contentStyle={{ 
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', 
+                        fontSize: '11px',
+                        fontFamily: 'Inter, sans-serif'
+                      }}
+                    />
+                    <Pie
+                      data={[
+                        { name: 'Carte Bancaire', value: paymentBreakdown.cb, color: '#2563eb' },
+                        { name: 'Tickets Resto', value: paymentBreakdown.tr, color: '#f59e0b' },
+                        { name: 'Espèces', value: paymentBreakdown.cash, color: '#10b981' },
+                        { name: 'AMEX', value: paymentBreakdown.amex, color: '#a855f7' },
+                        { name: 'Virement', value: paymentBreakdown.transfer, color: '#64748b' },
+                      ].filter(item => item.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {[
+                        { name: 'Carte Bancaire', value: paymentBreakdown.cb, color: '#2563eb' },
+                        { name: 'Tickets Resto', value: paymentBreakdown.tr, color: '#f59e0b' },
+                        { name: 'Espèces', value: paymentBreakdown.cash, color: '#10b981' },
+                        { name: 'AMEX', value: paymentBreakdown.amex, color: '#a855f7' },
+                        { name: 'Virement', value: paymentBreakdown.transfer, color: '#64748b' },
+                      ].filter(item => item.value > 0).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Center text within Donut */}
+                <div className="absolute flex flex-col items-center justify-center text-center pointer-events-none">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Total</span>
+                  <span className="text-sm font-black text-slate-800 tracking-tight mt-1">
+                    {totalPayments.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-slate-400 text-xs">
+                Aucune recette enregistrée
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4 flex-1 flex flex-col justify-center">
             {[
               { label: 'Carte Bancaire', value: paymentBreakdown.cb, color: 'bg-blue-600', icon: <CreditCard size={14} /> },
               { label: 'Tickets Resto', value: paymentBreakdown.tr, color: 'bg-amber-500', icon: <Receipt size={14} /> },
               { label: 'Espèces', value: paymentBreakdown.cash, color: 'bg-emerald-500', icon: <Banknote size={14} /> },
               { label: 'AMEX', value: paymentBreakdown.amex, color: 'bg-purple-500', icon: <Landmark size={14} /> },
+              { label: 'Virement', value: paymentBreakdown.transfer, color: 'bg-slate-500', icon: <Plus size={14} /> },
             ].map((item) => {
               const percentage = totalPayments > 0 ? Math.round((item.value / totalPayments) * 100) : 0;
               return (
                 <div key={item.label} className="group">
-                  <div className="flex justify-between items-center text-sm mb-2">
+                  <div className="flex justify-between items-center text-xs mb-1.5">
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400 group-hover:text-slate-900 transition-colors">{item.icon}</span>
                       <span className="text-slate-600 font-bold tracking-tight">{item.label}</span>
                     </div>
-                    <span className="font-black text-slate-900">{percentage}%</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-400">
+                        {item.value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                      </span>
+                      <span className="font-black text-slate-900">{percentage}%</span>
+                    </div>
                   </div>
-                  <div className="w-full h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                  <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${percentage}%` }}
                       transition={{ duration: 1, ease: "easeOut" }}
-                      className={clsx("h-full rounded-full shadow-sm", item.color)} 
+                      className={clsx("h-full rounded-full shadow-sm-sm", item.color)} 
                     />
                   </div>
                 </div>

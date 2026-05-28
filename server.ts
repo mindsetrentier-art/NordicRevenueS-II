@@ -4,12 +4,67 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+import { GoogleGenAI } from "@google/genai";
+
 const app = express();
 const PORT = 3000;
+
+app.use(express.json());
+
+// Lazy-initialized Gemini Client
+let aiClient: GoogleGenAI | null = null;
+function getGeminiClient() {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("La clé d'API GEMINI_API_KEY n'est pas configurée dans l'application.");
+    }
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return aiClient;
+}
 
 // API routes FIRST
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.post("/api/analyze-error", async (req, res) => {
+  try {
+    const { errorMessage, posProvider, service } = req.body;
+    if (!errorMessage) {
+      return res.status(400).json({ error: "Le message d'erreur est obligatoire pour l'analyse." });
+    }
+
+    const ai = getGeminiClient();
+    const prompt = `Vous êtes un ingénieur de support de haut niveau expert en intégration de caisses de restauration/commerce (POS API).
+Analyse l'erreur de synchronisation suivante rencontrée par l'un de nos marchands et formule un diagnostic clair et des étapes de résolution en français :
+
+- Caisse (POS Provider) : ${posProvider || 'Non spécifié'}
+- Service de synchronisation : ${service || 'Non spécifié'}
+- Message d'erreur brut : ${errorMessage}
+
+Formate ta réponse de façon extrêmement propre en Markdown. Elle doit être très structurée, concise, et rassurante :
+1. **Ce que cela signifie** : Une phrase simple et abordable expliquant le problème sans jargon excessif.
+2. **Comment résoudre l'erreur** : 2 à 3 étapes de dépannage concrètes, prioritaires, numérotées pour rétablir la situation. Indique si le marchand doit aller dans les paramètres de notre application NordicRevenues pour réinitialiser la clé d'API ou s'il s'agit d'une panne temporaire du fournisseur de caisse.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+    });
+
+    res.json({ analysis: response.text || "Désolé, l'IA n'a pas pu formuler de diagnostic pour cette erreur." });
+  } catch (error: any) {
+    console.error("Gemini Error:", error);
+    res.status(500).json({ error: error.message || "Erreur interne lors du diagnostic IA." });
+  }
 });
 
 // --- Spotify OAuth ---

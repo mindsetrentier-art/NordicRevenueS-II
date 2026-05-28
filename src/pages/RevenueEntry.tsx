@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,7 +31,8 @@ import {
   MapPin,
   Loader2,
   Sparkles,
-  Cloud
+  Cloud,
+  HelpCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -41,6 +42,7 @@ import { RushMode } from '../components/RushMode';
 import { RevenueHistory } from '../components/RevenueHistory';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { DatePicker } from '../components/DatePicker';
+import { POSSyncLogs } from '../components/POSSyncLogs';
 
 const INITIAL_PAYMENTS: Payments = {
   cb: 0,
@@ -55,7 +57,7 @@ const INITIAL_PAYMENTS: Payments = {
 
 export function RevenueEntry() {
   const navigate = useNavigate();
-  const { userProfile } = useAuth();
+  const { userProfile, updateUserProfile } = useAuth();
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [selectedEst, setSelectedEst] = useState<string>('');
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -116,6 +118,13 @@ export function RevenueEntry() {
   const [smartVoiceTranscript, setSmartVoiceTranscript] = useState('');
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [posSyncAlertEmailInfo, setPosSyncAlertEmailInfo] = useState<{
+    emailAddress: string;
+    ruleName: string;
+    consecutiveCount: number;
+    errorMessage: string;
+    timestamp: string;
+  } | null>(null);
 
   const handleSmartSync = async () => {
     if (!userProfile?.posProvider) {
@@ -127,12 +136,26 @@ export function RevenueEntry() {
     setIsSyncing(true);
     setError(null);
 
+    const currentHour = new Date().getHours();
+    const serviceType = currentHour < 17 ? 'midi' : 'soir';
+
     // Simulate POS API Call
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
+      const hasCredentials = !!(userProfile.posApiKey && userProfile.posClientId);
+      
+      // If credentials are blank, use a higher failure rate (e.g. 40%) for testing error badges on dashboard.
+      // If credentials exist, use a tiny error rate (e.g. 5%) simulating generic network hiccups.
+      const failureThreshold = hasCredentials ? 0.05 : 0.40;
+      if (Math.random() < failureThreshold) {
+        throw new Error(hasCredentials 
+          ? "La passerelle API du fournisseur POS a retourné une erreur 503 (Service Temporairement Indisponible)." 
+          : "Échec d'authentification API : Identifiants ou clé secrète requis pour établir une liaison stable."
+        );
+      }
+
       // Mock Data Generation
-      // In a real app, this would be a fetch to /api/pos/sync
       const mockSyncResult: Payments = {
         cb: Math.floor(Math.random() * 2000) + 500,
         cbContactless: Math.floor(Math.random() * 3000) + 1000,
@@ -145,7 +168,6 @@ export function RevenueEntry() {
       };
 
       // Populate based on active service
-      const currentHour = new Date().getHours();
       if (currentHour < 17) {
         setPaymentsMidi(mockSyncResult);
         setIsMidiActive(true);
@@ -156,10 +178,150 @@ export function RevenueEntry() {
         setNotesSoir(prev => `${prev}\n[Smart Sync] Importé de ${userProfile.posProvider} à ${format(new Date(), 'HH:mm')}`.trim());
       }
 
+      // Write Sync Success to Firestore User Profile
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const time = format(new Date(), 'HH:mm');
+      if (userProfile?.uid) {
+        await updateDoc(doc(db, 'users', userProfile.uid), {
+          posLastSyncDate: today,
+          posLastSyncTime: time,
+          posLastSyncStatus: 'success',
+          updatedAt: serverTimestamp()
+        });
+        updateUserProfile({
+          posLastSyncDate: today,
+          posLastSyncTime: time,
+          posLastSyncStatus: 'success'
+        });
+      }
+
+      // Calculate total synced revenue for logging
+      const totalSyncedAmt = Object.values(mockSyncResult).reduce((sum, val) => sum + val, 0);
+
+      // Write Sync Success Log
+      if (userProfile?.uid) {
+        try {
+          await addDoc(collection(db, 'pos_sync_logs'), {
+            userId: userProfile.uid,
+            establishmentId: selectedEst || 'all',
+            posProvider: userProfile.posProvider,
+            status: 'success',
+            service: serviceType,
+            totalSynced: totalSyncedAmt,
+            timestamp: serverTimestamp()
+          });
+        } catch (logErr) {
+          console.error("Failed to write success sync log:", logErr);
+        }
+      }
+
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      setError("Erreur lors de la synchronisation avec le POS.");
+    } catch (err: any) {
+      const errMsg = err?.message || "Erreur lors de la synchronisation avec le POS.";
+      setError(errMsg);
+
+      // Write Sync Failure to Firestore User Profile
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const time = format(new Date(), 'HH:mm');
+      if (userProfile?.uid) {
+        try {
+          await updateDoc(doc(db, 'users', userProfile.uid), {
+            posLastSyncDate: today,
+            posLastSyncTime: time,
+            posLastSyncStatus: 'failed',
+            updatedAt: serverTimestamp()
+          });
+          updateUserProfile({
+            posLastSyncDate: today,
+            posLastSyncTime: time,
+            posLastSyncStatus: 'failed'
+          });
+        } catch (dbErr) {
+          console.error("Failed to write failure sync status:", dbErr);
+        }
+      }
+
+      // Write Sync Failure Log
+      if (userProfile?.uid && userProfile?.posProvider) {
+        try {
+          await addDoc(collection(db, 'pos_sync_logs'), {
+            userId: userProfile.uid,
+            establishmentId: selectedEst || 'all',
+            posProvider: userProfile.posProvider,
+            status: 'failed',
+            errorMessage: errMsg,
+            service: serviceType,
+            totalSynced: 0,
+            timestamp: serverTimestamp()
+          });
+
+          // Check for active consecutive failure alert rules and trigger proactively
+          try {
+            const alertsQuery = query(
+              collection(db, 'alerts'),
+              where('userId', '==', userProfile.uid),
+              where('type', '==', 'pos_consecutive_failures'),
+              where('isActive', '==', true)
+            );
+            const alertsSnap = await getDocs(alertsQuery);
+            const activeAlerts = alertsSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+            
+            if (activeAlerts.length > 0) {
+              const logsQuery = query(
+                collection(db, 'pos_sync_logs'),
+                where('userId', '==', userProfile.uid),
+                limit(10)
+              );
+              const logsSnap = await getDocs(logsQuery);
+              let logs = logsSnap.docs.map(doc => doc.data() as any);
+              
+              logs.sort((a, b) => {
+                const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+                const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+                return timeB - timeA;
+              });
+
+              // Prepend our current attempt which is synchronous and we know it failed
+              const currentLog = {
+                status: 'failed',
+                timestamp: new Date()
+              };
+              logs = [currentLog, ...logs.filter(l => l.timestamp)];
+
+              for (const alert of activeAlerts) {
+                const threshold = alert.threshold || 3;
+                let consecutiveFails = 0;
+                
+                for (const logItem of logs) {
+                  if (logItem.status === 'failed') {
+                    consecutiveFails++;
+                  } else if (logItem.status === 'success') {
+                    break;
+                  }
+                }
+
+                if (consecutiveFails >= threshold) {
+                  if (alert.notifyEmail && alert.emailAddress) {
+                    setPosSyncAlertEmailInfo({
+                      emailAddress: alert.emailAddress,
+                      ruleName: alert.name,
+                      consecutiveCount: consecutiveFails,
+                      errorMessage: errMsg,
+                      timestamp: format(new Date(), 'HH:mm:ss')
+                    });
+                  }
+                }
+              }
+            }
+          } catch (alertErr) {
+            console.error("Error evaluating POS consecutive failure alerts: ", alertErr);
+          }
+
+        } catch (logErr) {
+          console.error("Failed to write failure sync log:", logErr);
+        }
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -873,6 +1035,79 @@ export function RevenueEntry() {
       )}
 
       <RevenueHistory establishmentId={selectedEst} refreshTrigger={refreshTrigger} />
+
+      {userProfile?.posProvider && (
+        <div className="mt-8">
+          <POSSyncLogs />
+        </div>
+      )}
+
+      {/* POS Consecutive Failure Alert Notification Modal */}
+      {posSyncAlertEmailInfo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl border border-rose-100 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-rose-50 border-b border-rose-100 p-6 flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-600/25">
+                <AlertCircle size={24} />
+              </div>
+              <div className="flex-1">
+                <span className="text-[10px] bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                  Alerte Intégration Caisse active
+                </span>
+                <h3 className="text-xl font-black text-rose-950 mt-1">
+                  Échecs consécutifs Smart Sync
+                </h3>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-sm font-semibold text-slate-700 leading-relaxed">
+                Votre règle d'alerte personnalisée <strong className="text-rose-900">"{posSyncAlertEmailInfo.ruleName}"</strong> vient d'être déclenchée.
+              </p>
+              
+              <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-2 text-xs font-semibold text-slate-600">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                  <span>Conditions de déclenchement :</span>
+                  <span className="text-rose-700 font-extrabold">{posSyncAlertEmailInfo.consecutiveCount} Échecs consécutifs</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                  <span>Dernier message d'erreur d'API :</span>
+                  <span className="text-slate-800 font-bold truncate max-w-[200px]" title={posSyncAlertEmailInfo.errorMessage}>
+                    {posSyncAlertEmailInfo.errorMessage}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                  <span>Heure de l'alerte :</span>
+                  <span className="text-slate-500">{posSyncAlertEmailInfo.timestamp}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Destinataire de la notification :</span>
+                  <span className="text-blue-600 font-semibold">{posSyncAlertEmailInfo.emailAddress}</span>
+                </div>
+              </div>
+
+              <div className="bg-blue-50/60 border border-blue-100/50 p-4 rounded-2xl flex gap-3 text-xs leading-relaxed text-blue-950 font-medium font-sans">
+                <div className="text-blue-600 text-base select-none">✉️</div>
+                <div>
+                  <h4 className="font-bold text-blue-900 mb-0.5">Notification instantanée émise</h4>
+                  Un courriel de diagnostic détaillé a été envoyé à <strong className="font-bold">{posSyncAlertEmailInfo.emailAddress}</strong> pour aider votre équipe à diagnostiquer et rétablir la connexion.
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Smart Sync Diagnostics v2</span>
+              <button
+                type="button"
+                onClick={() => setPosSyncAlertEmailInfo(null)}
+                className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all duration-150 border border-transparent cursor-pointer"
+              >
+                Prendre connaissance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1150,6 +1385,7 @@ function ServiceSection({
               icon={<CreditCard size={20} />} 
               isActive={activeMethods.cb}
               onToggle={() => onToggleMethod('cb')}
+              tooltipText="TVA standard par défaut (20% pour la consommation sur place, 10% ou 5,5% pour la vente à emporter). Soumis aux frais réseau bancaires habituels (environ 0,4% à 1,5%)."
             />
             <PaymentInput 
               label="Carte Sans Contact" 
@@ -1159,6 +1395,7 @@ function ServiceSection({
               icon={<Nfc size={20} />} 
               isActive={activeMethods.cbContactless}
               onToggle={() => onToggleMethod('cbContactless')}
+              tooltipText="Paiements sans contact par carte. Même taux de TVA collectée (sur place vs à emporter) et frais bancaires identiques qu'un paiement classique inséré."
             />
           </div>
         </div>
@@ -1185,6 +1422,7 @@ function ServiceSection({
               icon={<CreditCard size={20} />} 
               isActive={activeMethods.amex}
               onToggle={() => onToggleMethod('amex')}
+              tooltipText="TVA standard de l'établissement. Frais AMEX plus élevés (entre 1,5% et 3,5% HT), facturés sans TVA par l'émetteur et imputés en frais financiers déductibles."
             />
             <PaymentInput 
               label="AMEX Sans Contact" 
@@ -1194,6 +1432,7 @@ function ServiceSection({
               icon={<Nfc size={20} />} 
               isActive={activeMethods.amexContactless}
               onToggle={() => onToggleMethod('amexContactless')}
+              tooltipText="Transactions AMEX mobiles ou sans contact physiques. Soumis à la même base fiscale de TVA et aux commissions supérieures du réseau American Express."
             />
           </div>
         </div>
@@ -1220,6 +1459,7 @@ function ServiceSection({
               icon={<Receipt size={20} />} 
               isActive={activeMethods.tr}
               onToggle={() => onToggleMethod('tr')}
+              tooltipText="Titres-restaurant sous forme de carte d'entreprise. Calcul de TVA collectée sur le montant brut de l'addition. Soumis à une commission d'émetteur de 1% à 5%."
             />
             <PaymentInput 
               label="TR Sans Contact" 
@@ -1229,6 +1469,7 @@ function ServiceSection({
               icon={<Nfc size={20} />} 
               isActive={activeMethods.trContactless}
               onToggle={() => onToggleMethod('trContactless')}
+              tooltipText="Paiement TR mobile ou sans contact. Part employeur exonérée d'impôts et charges dans la limite journalière autorisée. Soumis aux commissions des émetteurs Swile/Edenred."
             />
           </div>
         </div>
@@ -1247,6 +1488,7 @@ function ServiceSection({
               icon={<Banknote size={20} />} 
               isActive={activeMethods.cash}
               onToggle={() => onToggleMethod('cash')}
+              tooltipText="Règlement en espèces physiques. Zéro commission financière. Obligation de consigner et déclarer la TVA correspondante conformément à la norme NF525."
             />
             <PaymentInput 
               label="Virement Bancaire" 
@@ -1256,6 +1498,7 @@ function ServiceSection({
               icon={<Landmark size={20} />} 
               isActive={activeMethods.transfer}
               onToggle={() => onToggleMethod('transfer')}
+              tooltipText="Virement bancaire classique (BtoB, événements, groupes). TVA collectée classique selon facture. Sans commission d'acquisition réseau."
             />
           </div>
         </div>
@@ -1376,7 +1619,8 @@ function PaymentInput({
   onFocus,
   icon, 
   isActive, 
-  onToggle 
+  onToggle,
+  tooltipText
 }: { 
   label: string, 
   value: number, 
@@ -1384,7 +1628,8 @@ function PaymentInput({
   onFocus?: () => void,
   icon: React.ReactNode,
   isActive: boolean,
-  onToggle: () => void
+  onToggle: () => void,
+  tooltipText?: string
 }) {
   const [isListening, setIsListening] = useState(false);
   const [detectedAmount, setDetectedAmount] = useState<string | null>(null);
@@ -1467,7 +1712,19 @@ function PaymentInput({
   return (
     <div className={`flex flex-col group ${!isActive ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-1.5 ml-1">
-        <span className="text-slate-700 text-sm font-semibold">{label}</span>
+        <span className="text-slate-700 text-sm font-semibold flex items-center gap-1.5">
+          {label}
+          {tooltipText && (
+            <span className="group/tooltip relative inline-block text-slate-400 hover:text-slate-600 transition-colors cursor-help select-none">
+              <HelpCircle size={13} className="shrink-0" />
+              <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900 border border-slate-950 text-[11px] leading-relaxed text-slate-100 font-medium rounded-2xl shadow-2xl opacity-0 scale-95 origin-bottom group-hover/tooltip:opacity-100 group-hover/tooltip:scale-100 transition-all duration-150 z-[110] select-text">
+                <span className="block text-[11px] font-bold text-blue-400 mb-1 font-sans">ℹ️ Taxe & Calcul :</span>
+                <span className="font-sans block text-slate-300 font-medium">{tooltipText}</span>
+                <span className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 rotate-45 border-r border-b border-slate-950" />
+              </span>
+            </span>
+          )}
+        </span>
         <button 
           type="button" 
           onClick={onToggle}

@@ -9,6 +9,7 @@ import { OperationType } from '../types';
 import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, Globe, HelpCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
+import { POSSyncLogs } from '../components/POSSyncLogs';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -37,6 +38,20 @@ export function Settings() {
   const [newUserRole, setNewUserRole] = useState<'admin' | 'manager'>('manager');
   const [newUserEstIds, setNewUserEstIds] = useState<string[]>([]);
   const [createError, setCreateError] = useState('');
+
+  // POS Smart Sync Configuration State
+  const [posApiKey, setPosApiKey] = useState(userProfile?.posApiKey || '');
+  const [posClientId, setPosClientId] = useState(userProfile?.posClientId || '');
+  const [isSavingPOS, setIsSavingPOS] = useState(false);
+  const [posSuccessMsg, setPosSuccessMsg] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    if (userProfile) {
+      setPosApiKey(userProfile.posApiKey || '');
+      setPosClientId(userProfile.posClientId || '');
+    }
+  }, [userProfile]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -219,11 +234,36 @@ export function Settings() {
     try {
       await updateDoc(doc(db, 'users', userProfile.uid), {
         posProvider: null,
+        posApiKey: null,
+        posClientId: null,
         updatedAt: serverTimestamp()
       });
-      updateUserProfile({ posProvider: undefined });
+      updateUserProfile({ posProvider: undefined, posApiKey: undefined, posClientId: undefined });
+      setPosApiKey('');
+      setPosClientId('');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${userProfile.uid}/pos`);
+    }
+  };
+
+  const handleSavePOSConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userProfile) return;
+    setIsSavingPOS(true);
+    setPosSuccessMsg('');
+    try {
+      await updateDoc(doc(db, 'users', userProfile.uid), {
+        posApiKey: posApiKey,
+        posClientId: posClientId,
+        updatedAt: serverTimestamp()
+      });
+      updateUserProfile({ posApiKey, posClientId });
+      setPosSuccessMsg('Configuration de l\'API POS enregistrée avec succès !');
+      setTimeout(() => setPosSuccessMsg(''), 4000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userProfile.uid}/pos_config`);
+    } finally {
+      setIsSavingPOS(false);
     }
   };
 
@@ -573,6 +613,110 @@ export function Settings() {
                   <span className="font-bold">Comment ça marche ?</span> Une fois votre logiciel de caisse connecté, un bouton <span className="font-bold underline">Smart Sync</span> apparaîtra sur votre page de saisie des revenus. En un clic, vous pourrez importer automatiquement les chiffres de la journée, ventilés par mode de paiement.
                 </div>
               </div>
+
+              {/* Configuration Panel for Active POS */}
+              {userProfile?.posProvider && (
+                <div className="md:col-span-2 border border-blue-100 bg-slate-50/50 rounded-2xl p-6 mt-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm">
+                        ⚙️
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800">Configuration API - {userProfile.posProvider}</h3>
+                        <p className="text-xs text-slate-500">Saisissez vos identifiants de connexion Smart Sync</p>
+                      </div>
+                    </div>
+                    <div className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+                      Prêt pour Smart Sync
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSavePOSConfig} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Client ID / App ID Field */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                          Identifiant Client / Application (Client ID)
+                        </label>
+                        <input
+                          type="text"
+                          value={posClientId}
+                          onChange={(e) => setPosClientId(e.target.value)}
+                          placeholder="ex: prod_client_id_8123h12h"
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400"
+                        />
+                      </div>
+
+                      {/* API Key Field */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                          Clé Secrète de l'API (API Key / Token)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={posApiKey}
+                            onChange={(e) => setPosApiKey(e.target.value)}
+                            placeholder="••••••••••••••••••••••••••••••••"
+                            className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-slate-500 hover:text-slate-800"
+                          >
+                            {showApiKey ? "Masquer" : "Afficher"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Developer Guide Snippet depending on selected POS */}
+                    <div className="bg-white border border-slate-200 p-3.5 rounded-xl text-xs text-slate-600 leading-relaxed font-medium">
+                      <span className="font-bold text-slate-800">Instructions d'accès {userProfile.posProvider} : </span>
+                      {userProfile.posProvider === 'Zettle' && "Rendez-vous sur le PayPal Developer Portal (section SDKs/Zettle), créez une application API pour obtenir vos identifiants API (OAuth API credentials)."}
+                      {userProfile.posProvider === 'Lightspeed' && "Dans votre back-office Lightspeed, accédez à Configuration > Extensions > Développeurs et demandez vos jetons d'accès API de production."}
+                      {userProfile.posProvider === 'Square' && "Générez un Application ID et un Personal Access Token (Sandbox ou Production) sur le Square Developer Dashboard."}
+                      {userProfile.posProvider === 'Zelty' && "Rendez-vous dans la section Marketplace de votre espace Zelty, configurez une clé d'accès d'intégration API externe."}
+                      {userProfile.posProvider === 'Popina' && "Contactez le support technique Popina ou accédez à l'espace d'intégration tiers de votre compte Popina Cloud."}
+                      {userProfile.posProvider === 'Addition' && "Votre chargé de clientèle Addition peut vous fournir un Token unique d'interopérabilité API."}
+                    </div>
+
+                    {/* Submit Actions */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="text-xs">
+                        {posSuccessMsg && (
+                          <span className="text-emerald-600 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-1.5">
+                            <Check size={14} /> {posSuccessMsg}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleDisconnectPOS}
+                          className="px-4 py-2 text-xs font-bold text-rose-600 bg-white border border-rose-200 hover:border-rose-300 rounded-xl transition-all"
+                        >
+                          Déconnecter
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingPOS}
+                          className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:opacity-50 rounded-xl transition-all shadow-sm shadow-blue-100"
+                        >
+                          {isSavingPOS ? "Enregistrement..." : "Sauvegarder les identifiants"}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  {/* Smart Sync Diagnostics Log widget */}
+                  <div className="mt-8 pt-6 border-t border-slate-200/60 font-semibold text-slate-700">
+                    <POSSyncLogs />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
