@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage, Language } from '../contexts/LanguageContext';
@@ -10,6 +10,8 @@ import { Settings as SettingsIcon, Users, Shield, Building2, Check, X, Trash2, G
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { POSSyncLogs } from '../components/POSSyncLogs';
+import { exportToGoogleSheets } from '../utils/workspaceExport';
+import { Revenue } from '../types';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -45,6 +47,12 @@ export function Settings() {
   const [isSavingPOS, setIsSavingPOS] = useState(false);
   const [posSuccessMsg, setPosSuccessMsg] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+
+  // Workspace Export State
+  const { googleAccessToken, login } = useAuth();
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userProfile) {
@@ -243,6 +251,55 @@ export function Settings() {
       setPosClientId('');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${userProfile.uid}/pos`);
+    }
+  };
+
+  const handleWorkspaceExport = async () => {
+    if (!userProfile) return;
+
+    const confirmed = window.confirm(
+      "Êtes-vous sûr de vouloir exporter les données vers Google Sheets via votre compte Google Workspace ?"
+    );
+    if (!confirmed) return;
+
+    let currentToken = googleAccessToken;
+    if (!currentToken) {
+      try {
+        await login();
+        setExportError("Connecté à Google. Veuillez cliquer à nouveau sur Configurer pour exporter.");
+        return;
+      } catch (err) {
+        setExportError("Connexion Google échouée.");
+        return;
+      }
+    }
+    
+    setIsExporting(true);
+    setExportError(null);
+    setExportSuccess(null);
+    
+    try {
+        const q = query(
+          collection(db, 'revenues'),
+          where('user_id', '==', userProfile.uid)
+        );
+        const querySnapshot = await getDocs(q);
+        const revenuesData = querySnapshot.docs.map(docSnap => ({
+          ...docSnap.data(),
+          id: docSnap.id
+        })) as Revenue[];
+        
+        const sid = await exportToGoogleSheets(currentToken, revenuesData);
+        if (sid) {
+          setExportSuccess(`Export réussi: Bilans ajoutés au fichier Sheet.`);
+        } else {
+          setExportError("Erreur pendant l'exportation. Permision refusée ou réseau instable.");
+        }
+    } catch(err) {
+       console.error(err);
+       setExportError("Erreur pendant la récupération des bilans.");
+    } finally {
+       setIsExporting(false);
     }
   };
 
@@ -718,6 +775,40 @@ export function Settings() {
                 </div>
               )}
             </div>
+          </div>
+          
+          {/* Google Workspace Integration */}
+          <div className="p-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50">
+            <div>
+              <h3 className="font-bold text-slate-900 text-base mb-1">Export Google Workspace (Drive & Sheets)</h3>
+              <p className="text-sm text-slate-500 mb-2">
+                Exportez automatiquement vos bilans journaliers vers le Google Drive de votre comptable à minuit.
+              </p>
+              {exportError && (
+                <div className="text-xs bg-rose-50 text-rose-600 px-3 py-1.5 rounded-lg border border-rose-100 inline-block font-bold">
+                  {exportError}
+                </div>
+              )}
+              {exportSuccess && (
+                <div className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 inline-block font-bold mt-1">
+                  {exportSuccess}
+                </div>
+              )}
+            </div>
+            
+            <button 
+              onClick={handleWorkspaceExport}
+              disabled={isExporting}
+              className="px-4 py-2 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 transition-colors shrink-0 flex items-center justify-center gap-2 w-full md:w-auto disabled:opacity-50"
+            >
+              {isExporting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
+              ) : googleAccessToken ? (
+                <span>Exporter vers Sheets</span>
+              ) : (
+                <span>Connecter Google & Exporter</span>
+              )}
+            </button>
           </div>
         </div>
       )}

@@ -7,6 +7,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { fetchHistoricalWeather, getWeatherIcon, getWeatherLabel } from '../utils/weather';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import ReactMarkdown from 'react-markdown';
+import { motion, AnimatePresence } from 'motion/react';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -74,6 +76,10 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
   const [loadingCompare, setLoadingCompare] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
   const [weatherGroupStats, setWeatherGroupStats] = useState<any[] | null>(null);
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
+  const [aiCorrelationResult, setAiCorrelationResult] = useState<string | null>(null);
+  const [loadingAiCorrelation, setLoadingAiCorrelation] = useState(false);
+  const [aiCorrelationError, setAiCorrelationError] = useState<string | null>(null);
 
   const analyzeSyncByWeather = async () => {
     if (!userProfile?.uid) {
@@ -96,6 +102,8 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
         id: doc.id,
         ...doc.data()
       })) as any[];
+
+      setSyncLogs(logs);
 
       if (logs.length === 0) {
         setCompareError("Aucun log de synchronisation Smart Sync trouvé. Lisez ou importez des ventes pour alimenter l'analyse.");
@@ -175,6 +183,58 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
       setCompareError(err?.message || "Erreur lors du calcul de la corrélation météo.");
     } finally {
       setLoadingCompare(false);
+    }
+  };
+
+  const runAiCorrelation = async () => {
+    if (!weatherGroupStats || weatherGroupStats.length === 0) return;
+    setLoadingAiCorrelation(true);
+    setAiCorrelationError(null);
+    setAiCorrelationResult(null);
+
+    try {
+      // Extract failure logs and limit to last 15 elements to avoid token bloat
+      const failureLogs = syncLogs
+        .filter(log => log.status === 'failed')
+        .slice(0, 15)
+        .map(log => ({
+          service: log.service || 'N/A',
+          errorMessage: log.errorMessage || 'Unknown Error',
+          date: log.timestamp?.toDate ? format(log.timestamp.toDate(), 'yyyy-MM-dd HH:mm') : 'N/A'
+        }));
+
+      // Strip unnecessary visual styling attributes from stats to keep payload clean
+      const cleanedStats = weatherGroupStats.map(({ key, label, total, success, rate }) => ({
+        key,
+        label,
+        total,
+        success,
+        successRate: `${rate}%`
+      }));
+
+      const res = await fetch('/api/analyze-weather-correlation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          weatherStats: cleanedStats,
+          failureLogs,
+          posProvider: userProfile?.posProvider || 'Non spécifié'
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.analysis) {
+        setAiCorrelationResult(data.analysis);
+      } else {
+        throw new Error(data.error || "Une erreur s'est produite lors de la génération du diagnostic.");
+      }
+    } catch (err: any) {
+      console.error("AI Weather Correlation error:", err);
+      setAiCorrelationError(err?.message || "Erreur de connexion avec le service d'analyse IA.");
+    } finally {
+      setLoadingAiCorrelation(false);
     }
   };
 
@@ -471,7 +531,7 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
                       </div>
 
                       {/* Conclusion notes */}
-                      <div className="bg-indigo-50/50 border border-indigo-100/40 p-3 rounded-xl text-[11px] text-indigo-950 font-semibold leading-relaxed">
+                      <div className="bg-indigo-50/50 border border-indigo-100/40 p-3 rounded-xl text-[11px] text-indigo-950 font-semibold leading-relaxed mb-1">
                         <span className="text-indigo-800 font-bold block mb-0.5">💡 Constat & Interprétation :</span>
                         {(() => {
                           const activeStats = weatherGroupStats.filter(s => s.total > 0);
@@ -486,6 +546,57 @@ export function AIInsights({ revenueData, paymentData, periodLabel }: AIInsights
                           }
                           return "Haute stabilité démontrée ! Vos APIs de caisse connectée conservent un taux de réactivité optimal sans impact détectable lié aux dégradations météorologiques locales.";
                         })()}
+                      </div>
+
+                      {/* AI Correlation Report Option */}
+                      <div className="pt-2.5 border-t border-indigo-100/50 flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                            <CloudRain size={11} className="text-indigo-400" />
+                            Besoin d'un diagnostic réseau ?
+                          </span>
+                          <button
+                            type="button"
+                            onClick={runAiCorrelation}
+                            disabled={loadingAiCorrelation}
+                            className="bg-purple-600 hover:bg-purple-700 active:scale-95 disabled:opacity-50 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm select-none"
+                          >
+                            {loadingAiCorrelation ? (
+                              <>
+                                <Loader2 size={11} className="animate-spin text-purple-200" />
+                                <span>Diagnostic en cours...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={11} className="text-purple-200 shrink-0" />
+                                <span>Corréler & Diagnostiquer via l'IA</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {aiCorrelationError && (
+                          <div className="p-3 bg-rose-50 border border-rose-100 text-[11px] text-rose-700 rounded-xl flex items-center gap-2 font-medium">
+                            <AlertCircle size={14} className="text-rose-500 shrink-0" />
+                            <span>{aiCorrelationError}</span>
+                          </div>
+                        )}
+
+                        {aiCorrelationResult && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-purple-50/50 border border-purple-100 p-4 rounded-xl mt-1 select-text"
+                          >
+                            <div className="flex items-center gap-2 text-purple-950 font-black text-[11px] uppercase tracking-wider border-b border-purple-200/50 pb-2 mb-2.5">
+                              <Sparkles size={12} className="text-purple-600 shrink-0 animate-pulse" />
+                              <span>Diagnostic IA de Connectivité & Climat</span>
+                            </div>
+                            <div className="text-[11px] leading-relaxed text-slate-800 markdown-body font-sans space-y-1.5">
+                              <ReactMarkdown>{aiCorrelationResult}</ReactMarkdown>
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
                     </div>
                   ) : null}

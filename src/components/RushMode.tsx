@@ -55,25 +55,15 @@ export function RushMode({
   }, [activeField, service]);
 
   const handleNumber = (num: string) => {
-    if (inputValue === '0') {
-      setInputValue(num);
-    } else {
-      setInputValue(inputValue + num);
-    }
+    setInputValue(prev => prev === '0' ? num : prev + num);
   };
 
   const handleDecimal = () => {
-    if (!inputValue.includes('.')) {
-      setInputValue(inputValue + '.');
-    }
+    setInputValue(prev => !prev.includes('.') ? prev + '.' : prev);
   };
 
   const handleBackspace = () => {
-    if (inputValue.length > 1) {
-      setInputValue(inputValue.slice(0, -1));
-    } else {
-      setInputValue('0');
-    }
+    setInputValue(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
   };
 
   const handleClear = () => {
@@ -81,8 +71,11 @@ export function RushMode({
   };
 
   const handleApply = () => {
-    const val = parseFloat(inputValue) || 0;
-    setPayments(prev => ({ ...prev, [activeField]: val }));
+    setInputValue(prev => {
+      const val = parseFloat(prev) || 0;
+      setPayments(p => ({ ...p, [activeField]: val }));
+      return prev;
+    });
     
     // Auto-advance to next field if possible
     const currentIndex = PAYMENT_METHODS.findIndex(m => m.id === activeField);
@@ -90,6 +83,41 @@ export function RushMode({
       setActiveField(PAYMENT_METHODS[currentIndex + 1].id as keyof Payments);
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
+        handleNumber(e.key);
+      } else if (e.key === '.' || e.key === ',') {
+        handleDecimal();
+      } else if (e.key === 'Backspace') {
+        handleBackspace();
+      } else if (e.key === 'Enter') {
+        handleApply();
+      } else if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'c' || e.key === 'C') {
+        handleClear();
+      } else if (e.key === 'ArrowRight') {
+        setActiveField(prev => {
+          const currentIndex = PAYMENT_METHODS.findIndex(m => m.id === prev);
+          return currentIndex < PAYMENT_METHODS.length - 1 ? PAYMENT_METHODS[currentIndex + 1].id as keyof Payments : prev;
+        });
+      } else if (e.key === 'ArrowLeft') {
+        setActiveField(prev => {
+          const currentIndex = PAYMENT_METHODS.findIndex(m => m.id === prev);
+          return currentIndex > 0 ? PAYMENT_METHODS[currentIndex - 1].id as keyof Payments : prev;
+        });
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        setService(prev => prev === 'midi' ? 'soir' : 'midi');
+      } else if (e.key === 'v' || e.key === 'V') {
+        startListening();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeField, onClose]); // activeField needed for handleApply's auto advance
+
 
   const [isListening, setIsListening] = useState(false);
 
@@ -275,16 +303,21 @@ export function RushMode({
           <ChevronLeft size={24} /> Précédent
         </button>
         
-        <div className="flex gap-2">
-          {PAYMENT_METHODS.map((m) => (
-            <div 
-              key={m.id}
-              className={clsx(
-                "w-2 h-2 rounded-full transition-all",
-                activeField === m.id ? "bg-blue-500 w-6" : "bg-slate-700"
-              )}
-            />
-          ))}
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex gap-2">
+            {PAYMENT_METHODS.map((m) => (
+              <div 
+                key={m.id}
+                className={clsx(
+                  "w-2 h-2 rounded-full transition-all",
+                  activeField === m.id ? "bg-blue-500 w-6" : "bg-slate-700"
+                )}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] text-slate-500 font-medium tracking-wide">
+            Astuce : Utilisez votre clavier (NumPad, Entrée, Flèches, V)
+          </span>
         </div>
 
         <button 

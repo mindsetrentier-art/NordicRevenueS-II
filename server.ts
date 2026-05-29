@@ -67,6 +67,42 @@ Formate ta réponse de façon extrêmement propre en Markdown. Elle doit être t
   }
 });
 
+app.post("/api/analyze-weather-correlation", async (req, res) => {
+  try {
+    const { weatherStats, failureLogs, posProvider } = req.body;
+    const ai = getGeminiClient();
+
+    const prompt = `Vous êtes un Ingénieur Réseau Principal et Architecte de Systèmes de Caisse Distribués (Distributed POS Systems).
+Analyse la corrélation éventuelle entre les échecs de synchronisation d'API Smart Sync d'un marchand (utilisant le fournisseur de caisse "${posProvider || 'Non spécifié'}") et les conditions météorologiques historiques enregistrées lors de ces tentatives de connexion.
+
+Voici la synthèse statistique des tentatives Smart Sync regroupée selon les catégories météo :
+${JSON.stringify(weatherStats, null, 2)}
+
+Voici un échantillon condensé d'erreurs réelles constatées lors des échecs de synchronisation sur cette période :
+${JSON.stringify(failureLogs, null, 2)}
+
+Rédige un rapport technique de corrélation de connectivité réseau extrêmement précis, en français, articulé autour des points suivants :
+1. **Analyse Statistique & Corrélation** : Décris si une météo dégradée (Pluie, Orages, Brouillard sévère) montre un taux de réussite significativement plus bas par rapport aux journées ensoleillées ou nuageuses.
+2. **Vulnérabilités d'Infrastructure possibles** : Propose des explications techniques rationnelles de connectivité. Par exemple :
+   - Atténuation de propagation du signal par l'humidité de l'air ou de fortes pluies (liaisons hertziennes, 4G/5G, extensions WiFi extérieures ou terrasses).
+   - Infiltration d'eau, de pluie ou d'humidité dans le câblage physique filaire (liaisons ADSL ou cuivres de voirie non isolées).
+   - Surcharge électrique, micro-coupures de courant locales, ou perturbations magnétiques orageuses affectant les serveurs hôtes ou les boîtiers d'interconnexion (routeurs, modems de caisse).
+3. **Plan Stratégique d'Optimisation Réseau** : Formule 3 suggestions d'ingénierie concrètes, durables et faciles à activer (ex: isolation de ligne, basculement automatique sur un backup 4G de secours, réajustement des bandes WiFi à 5 GHz pour couper les bruits, configuration de requêtes avec délai d'attente (timeout) plus tolérant par temps humide).
+
+Rends ce rapport particulièrement moderne, structuré en Markdown avec des emojis appropriés, hyper-qualitatif, professionnel et limpide pour le chef d'établissement.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+    });
+
+    res.json({ analysis: response.text || "Désolé, l'IA n'a pas pu formuler de diagnostic de corrélation." });
+  } catch (error: any) {
+    console.error("Gemini Weather Correlation Error:", error);
+    res.status(500).json({ error: error.message || "Erreur lors de la génération de l'analyse de corrélation météo." });
+  }
+});
+
 // --- Spotify OAuth ---
 app.get("/api/auth/spotify/url", (req, res) => {
   const redirectUri = req.query.redirectUri as string;

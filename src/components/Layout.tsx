@@ -8,6 +8,7 @@ import { ThemePicker } from './ThemePicker';
 import { 
   Gauge, 
   Building2, 
+  Map as MapIcon,
   CircleDollarSign, 
   LineChart, 
   SlidersHorizontal, 
@@ -53,6 +54,7 @@ export function Layout() {
     { to: '/entry', icon: CircleDollarSign, label: t('nav.entry'), shortLabel: 'Caisse' },
     { to: '/reports', icon: LineChart, label: t('nav.reports'), shortLabel: 'Rapports' },
     { to: '/establishments', icon: Building2, label: t('nav.establishments'), shortLabel: 'Sites' },
+    { to: '/master-map', icon: MapIcon, label: 'Vue Master', shortLabel: 'Master' },
     { to: '/alerts', icon: BellRing, label: t('nav.alerts'), shortLabel: 'Alertes' },
     { to: '/reviews', icon: Star, label: t('nav.reviews'), shortLabel: 'Avis' },
     { to: '/guide', icon: HelpCircle, label: 'Guide & Aide', shortLabel: 'Guide' },

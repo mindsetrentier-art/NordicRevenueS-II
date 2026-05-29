@@ -32,6 +32,8 @@ interface POSSyncLog {
   status: 'success' | 'failed';
   errorMessage?: string;
   service?: string;
+  deviceInfo?: string;
+  appVersion?: string;
   totalSynced?: number;
   timestamp: any; // Firestore Timestamp
 }
@@ -219,6 +221,11 @@ export function POSSyncLogs() {
   const totalCount = logs.length;
   const successRate = totalCount > 0 ? Math.round((successCount / totalCount) * 100) : 100;
 
+  const recentLogs = logs.slice(0, 10);
+  const recentTotalCount = recentLogs.length;
+  const recentSuccessCount = recentLogs.filter(l => l.status === 'success').length;
+  const healthRate = recentTotalCount > 0 ? Math.round((recentSuccessCount / recentTotalCount) * 100) : 100;
+
   if (!userProfile?.posProvider) {
     return (
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm text-center">
@@ -236,10 +243,26 @@ export function POSSyncLogs() {
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+      <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Journal des Synchronisations</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Diagnostiquez et analysez les flux d'API Smart Sync</p>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Journal des Synchronisations</h2>
+            {logs.length > 0 && (
+              <div className={`px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${
+                healthRate > 90 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                healthRate >= 70 ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                'bg-rose-50 border-rose-200 text-rose-700'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  healthRate > 90 ? 'bg-emerald-500' :
+                  healthRate >= 70 ? 'bg-amber-500' :
+                  'bg-rose-500 animate-pulse'
+                }`}></span>
+                Santé Système
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-1">Diagnostiquez et analysez les flux d'API Smart Sync</p>
         </div>
         <div className="flex items-center gap-2">
           {logs.length > 0 && (
@@ -311,12 +334,21 @@ export function POSSyncLogs() {
             const logFormatted = format(logDate, 'dd MMMM, HH:mm', { locale: fr });
 
             return (
-              <div 
+              <motion.div 
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ 
+                  opacity: 1, 
+                  y: 0,
+                  backgroundColor: log.status === 'success' && !isExpanded ? 'rgba(248, 250, 252, 0)' : isExpanded ? 'rgba(248, 250, 252, 0.5)' : 'transparent'
+                }}
+                transition={{ duration: 0.3 }}
                 key={log.id} 
-                className={`transition-colors duration-150 ${isExpanded ? 'bg-slate-50/50' : 'hover:bg-slate-50/30'}`}
+                className="transition-colors duration-150 hover:bg-slate-50/30 overflow-hidden"
               >
                 {/* Row Summary */}
-                <div 
+                <motion.div 
+                  layout="position"
                   onClick={() => toggleExpand(log.id)}
                   className="p-4 flex items-center justify-between gap-4 cursor-pointer select-none"
                 >
@@ -371,140 +403,167 @@ export function POSSyncLogs() {
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </span>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Expanded Trace Logs */}
-                <AnimatePresence>
+                <AnimatePresence mode="wait">
                   {isExpanded && (
                     <motion.div
+                      layout="position"
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden border-t border-slate-100"
                     >
                       <div className="p-4 bg-slate-50 border-b border-slate-100 text-[11px] space-y-2 font-medium leading-relaxed">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-slate-500">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-slate-500">
                           <div>
-                            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block">ID de la transaction :</span>
+                            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block mb-0.5">ID de la transaction :</span>
                             <span className="font-mono text-slate-700 font-semibold">{log.id}</span>
                           </div>
                           <div>
-                            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block">Date complète :</span>
+                            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block mb-0.5">Date complète :</span>
                             <span className="text-slate-700 font-semibold">
                               {log.timestamp?.toDate ? format(log.timestamp.toDate(), 'eeee d MMMM yyyy, HH:mm:ss', { locale: fr }) : '-'}
                             </span>
                           </div>
+                          <div>
+                            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block mb-0.5">Appareil source :</span>
+                            <span className="text-slate-700 font-semibold">
+                              {log.deviceInfo || 'Terminal de caisse par défaut'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider block mb-0.5">Version de l'application :</span>
+                            <span className="font-mono text-slate-700 font-semibold">{log.appVersion || 'v1.0.0'}</span>
+                          </div>
                         </div>
 
-                        {log.status === 'failed' ? (
-                          <div className="space-y-3">
-                            <div className="bg-rose-50 border border-rose-100 text-rose-700 rounded-xl p-3 mt-2 flex gap-2 w-full">
-                              <ShieldAlert size={14} className="text-rose-500 shrink-0 mt-0.5" />
-                              <div className="flex-1 min-w-0">
-                                <span className="font-bold block text-rose-900 uppercase text-[9px] tracking-wider">Erreur diagnostic :</span>
-                                <p className="mt-0.5 font-semibold text-[11px] leading-relaxed select-all text-rose-950">
-                                  {log.errorMessage || "Aucune description d'erreur technique retournée."}
-                                </p>
-                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">
-                                  Suggestion : Vérifiez si vos identifiants d'API ou jetons d'authentification posés dans les paramètres sont obsolètes ou erronés.
-                                </p>
+                        <AnimatePresence mode="wait">
+                          {log.status === 'failed' ? (
+                            <motion.div 
+                              key="failed"
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 10 }}
+                              transition={{ duration: 0.2 }}
+                              className="space-y-3"
+                            >
+                              <div className="bg-rose-50 border border-rose-100 text-rose-700 rounded-xl p-3 mt-2 flex gap-2 w-full">
+                                <ShieldAlert size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-bold block text-rose-900 uppercase text-[9px] tracking-wider">Erreur diagnostic :</span>
+                                  <p className="mt-0.5 font-semibold text-[11px] leading-relaxed select-all text-rose-950">
+                                    {log.errorMessage || "Aucune description d'erreur technique retournée."}
+                                  </p>
+                                  <p className="mt-1 text-[10px] text-rose-500 font-semibold">
+                                    Suggestion : Vérifiez si vos identifiants d'API ou jetons d'authentification posés dans les paramètres sont obsolètes ou erronés.
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                            
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
+                              
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <button
+                                    type="button"
+                                    disabled={analyzingLogId !== null}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAnalyzeError(log);
+                                    }}
+                                    className="bg-purple-100 hover:bg-purple-200 text-purple-800 hover:text-purple-900 active:scale-95 disabled:opacity-50 font-extrabold text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.2 transition-all select-none cursor-pointer border border-purple-200/50"
+                                  >
+                                    {analyzingLogId === log.id ? (
+                                      <>
+                                        <RefreshCw size={11} className="animate-spin text-purple-600" />
+                                        <span>Analyse en cours...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles size={11} className="text-purple-600 shrink-0" />
+                                        <span>Dépanner avec l'IA</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
                                 <button
                                   type="button"
-                                  disabled={analyzingLogId !== null}
+                                  disabled={retryingLogId !== null}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleAnalyzeError(log);
+                                    handleRetrySync(log);
                                   }}
-                                  className="bg-purple-100 hover:bg-purple-200 text-purple-800 hover:text-purple-900 active:scale-95 disabled:opacity-50 font-extrabold text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.2 transition-all select-none cursor-pointer border border-purple-200/50"
+                                  className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold text-[10px] px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all duration-155 border border-transparent disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                                 >
-                                  {analyzingLogId === log.id ? (
+                                  {retryingLogId === log.id ? (
                                     <>
-                                      <RefreshCw size={11} className="animate-spin text-purple-600" />
-                                      <span>Analyse en cours...</span>
+                                      <RefreshCw size={11} className="animate-spin text-blue-400" />
+                                      <span>Synchronisation...</span>
                                     </>
                                   ) : (
                                     <>
-                                      <Sparkles size={11} className="text-purple-600 shrink-0" />
-                                      <span>Dépanner avec l'IA</span>
+                                      <RefreshCw size={10} className="text-slate-200" />
+                                      <span>Relancer la synchro</span>
                                     </>
                                   )}
                                 </button>
                               </div>
 
-                              <button
-                                type="button"
-                                disabled={retryingLogId !== null}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRetrySync(log);
-                                }}
-                                className="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-extrabold text-[10px] px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md transition-all duration-155 border border-transparent disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-                              >
-                                {retryingLogId === log.id ? (
-                                  <>
-                                    <RefreshCw size={11} className="animate-spin text-blue-400" />
-                                    <span>Synchronisation...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw size={10} className="text-slate-200" />
-                                    <span>Relancer la synchro</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-
-                            {aiDiagnostics[log.id] && (
-                              <motion.div 
-                                initial={{ opacity: 0, y: 5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-purple-50/70 border border-purple-100 rounded-2xl p-3.5 mt-2"
-                              >
-                                <div className="flex items-center gap-1.2 text-purple-900 font-extrabold text-[9px] uppercase tracking-wider mb-1.5">
-                                  <Sparkles size={11} className="text-purple-600 shrink-0" />
-                                  <span>Diagnostic Intelligent IA</span>
-                                </div>
-                                <div className="text-[11px] leading-relaxed text-slate-800 markdown-body font-sans">
-                                  <ReactMarkdown>{aiDiagnostics[log.id]}</ReactMarkdown>
-                                </div>
-                                <div className="flex justify-end mt-2">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAnalyzeError(log);
-                                    }}
-                                    disabled={analyzingLogId === log.id}
-                                    className="text-purple-600 hover:text-purple-800 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <RefreshCw size={10} className={analyzingLogId === log.id ? "animate-spin" : ""} />
-                                    <span>Réanalyser</span>
-                                  </button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="bg-emerald-50/60 border border-emerald-100 text-emerald-800 rounded-xl p-3 mt-2 flex gap-2 w-full">
-                            <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                            <div>
-                              <span className="font-bold block text-emerald-900 uppercase text-[9px] tracking-wider">Lien OK :</span>
-                              <p className="mt-0.5 text-[11px]">
-                                Flux d'entrée correctement authentifié. Les données de vente de caisse ont été parsées et appliquées à votre brouillon avec succès.
-                              </p>
-                            </div>
-                          </div>
-                        )}
+                              {aiDiagnostics[log.id] && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: 5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="bg-purple-50/70 border border-purple-100 rounded-2xl p-3.5 mt-2"
+                                >
+                                  <div className="flex items-center gap-1.2 text-purple-900 font-extrabold text-[9px] uppercase tracking-wider mb-1.5">
+                                    <Sparkles size={11} className="text-purple-600 shrink-0" />
+                                    <span>Diagnostic Intelligent IA</span>
+                                  </div>
+                                  <div className="text-[11px] leading-relaxed text-slate-800 markdown-body font-sans">
+                                    <ReactMarkdown>{aiDiagnostics[log.id]}</ReactMarkdown>
+                                  </div>
+                                  <div className="flex justify-end mt-2">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAnalyzeError(log);
+                                      }}
+                                      disabled={analyzingLogId === log.id}
+                                      className="text-purple-600 hover:text-purple-800 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <RefreshCw size={10} className={analyzingLogId === log.id ? "animate-spin" : ""} />
+                                      <span>Réanalyser</span>
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </motion.div>
+                          ) : (
+                            <motion.div 
+                              key="success"
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 10 }}
+                              transition={{ duration: 0.2 }}
+                              className="bg-emerald-50/60 border border-emerald-100 text-emerald-800 rounded-xl p-3 mt-2 flex gap-2 w-full"
+                            >
+                              <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-bold block text-emerald-900 uppercase text-[9px] tracking-wider">Lien OK :</span>
+                                <p className="mt-0.5 text-[11px]">
+                                  Flux d'entrée correctement authentifié. Les données de vente de caisse ont été parsées et appliquées à votre brouillon avec succès.
+                                </p>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             );
           })
         )}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
+import { User as FirebaseUser, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { User, OperationType } from '../types';
@@ -9,6 +9,7 @@ interface AuthContextType {
   currentUser: FirebaseUser | null;
   userProfile: User | null;
   loading: boolean;
+  googleAccessToken: string | null;
   login: () => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (updates: Partial<User>) => void;
@@ -38,6 +39,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             userSnap = await getDoc(userRef);
           } catch (error) {
+            const errStr = error instanceof Error ? error.message : (error && typeof (error as any).message === 'string' ? (error as any).message : String(error));
+            if (errStr.toLowerCase().includes('offline')) {
+              console.warn("User is offline, using fallback profile");
+              setUserProfile({
+                  uid: user.uid, 
+                  role: 'manager', 
+                  establishmentIds: [], 
+                  displayName: user.displayName || '', 
+                  email: user.email || '', 
+                  createdAt: new Date()
+              } as User);
+              setLoading(false);
+              return;
+            }
             handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
             throw error;
           }
@@ -55,8 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               try {
                 emailSnap = await getDoc(emailRef);
               } catch (error) {
-                handleFirestoreError(error, OperationType.GET, `users/${user.email.toLowerCase()}`);
-                throw error;
+                const errStr = error instanceof Error ? error.message : (error && typeof (error as any).message === 'string' ? (error as any).message : String(error));
+                if (errStr.toLowerCase().includes('offline')) {
+                  console.warn("User is offline, skipping email check");
+                } else {
+                  handleFirestoreError(error, OperationType.GET, `users/${user.email.toLowerCase()}`);
+                  throw error;
+                }
               }
               
               if (emailSnap.exists()) {
@@ -82,8 +102,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 updatedAt: serverTimestamp()
               });
             } catch (error) {
-              handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}`);
-              throw error;
+              const errStr = error instanceof Error ? error.message : (error && typeof (error as any).message === 'string' ? (error as any).message : String(error));
+              if (errStr.toLowerCase().includes('offline')) {
+                console.warn("User is offline, skipping user profile creation in firestore");
+              } else {
+                handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}`);
+                throw error;
+              }
             }
             
             // Delete the pre-created email document if it existed
@@ -108,16 +133,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserProfile({ uid: user.uid, ...newUser } as User);
           }
         } catch (error) {
+          const errStr = error instanceof Error ? error.message : (error && typeof (error as any).message === 'string' ? (error as any).message : String(error));
           try {
             // If it wasn't already handled and thrown as a FirestoreErrorInfo
-            if (error instanceof Error && !error.message.includes('authInfo')) {
+            if (!errStr.includes('authInfo')) {
                handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
             }
           } catch (handledError) {
             setAuthError(handledError as Error);
           }
-          if (error instanceof Error && error.message.includes('authInfo')) {
-             setAuthError(error);
+          if (errStr.includes('authInfo')) {
+             setAuthError(error instanceof Error ? error : new Error(errStr));
           }
           setUserProfile(null);
         }
@@ -130,16 +156,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
+
   const login = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setGoogleAccessToken(credential.accessToken);
+      }
     } catch (error) {
       console.error('Error signing in with Google', error);
       throw error;
     }
   };
 
-  const logout = () => auth.signOut();
+  const logout = async () => {
+    await auth.signOut();
+    setGoogleAccessToken(null);
+  };
 
   const updateUserProfile = (updates: Partial<User>) => {
     if (userProfile) {
@@ -151,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     currentUser,
     userProfile,
     loading,
+    googleAccessToken,
     login,
     logout,
     updateUserProfile

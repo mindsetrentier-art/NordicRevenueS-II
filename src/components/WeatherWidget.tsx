@@ -36,6 +36,8 @@ interface ForecastDay {
   minTemp: number;
 }
 
+import { WeatherSyncAnalysisModal } from './WeatherSyncAnalysisModal';
+
 export function WeatherWidget() {
   const [time, setTime] = useState(new Date());
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -44,6 +46,7 @@ export function WeatherWidget() {
   const [airQuality, setAirQuality] = useState<AirQualityData | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [showSyncAnalysis, setShowSyncAnalysis] = useState(false);
   const [position, setPosition] = useState(() => {
     const saved = localStorage.getItem('weather-widget-pos');
     return saved ? JSON.parse(saved) : { x: 0, y: 0 };
@@ -380,31 +383,32 @@ export function WeatherWidget() {
   const suggestions = getSuggestions();
 
   return (
-    <div 
-      className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center pointer-events-none"
-      style={{
-        transform: `translate(calc(-50% + ${position.x}px), ${position.y}px) scale(${scale})`,
-        transformOrigin: 'top center'
-      }}
-    >
+    <>
       <div 
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleMouseDown}
-        className={`
-          bg-white/95 backdrop-blur-2xl border border-slate-200/60 px-6 py-2.5 rounded-b-[2.5rem] shadow-2xl shadow-slate-300/40 
-          flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-slate-600 text-xs font-bold transition-all duration-500 pointer-events-auto
-          cursor-move select-none group max-w-[95vw] border-t-0
-          ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}
-        `}
+        className="weather-widget-container fixed top-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center pointer-events-none"
+        style={{
+          transform: `translate(calc(-50% + ${position.x}px), ${position.y}px) scale(${scale})`,
+          transformOrigin: 'top center'
+        }}
       >
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-slate-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-        <div className="flex items-center gap-1.5">
-          <Clock size={14} className="text-slate-400" />
-          <span className="tabular-nums font-bold">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-          {locationName && (
-            <span className="text-[10px] text-slate-400 ml-1 hidden md:inline">({locationName})</span>
-          )}
-        </div>
+        <div 
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
+          className={`
+            bg-white/95 backdrop-blur-2xl border border-slate-200/60 px-6 py-2.5 rounded-b-[2.5rem] shadow-2xl shadow-slate-300/40 
+            flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-slate-600 text-xs font-bold transition-all duration-500 pointer-events-auto
+            cursor-move select-none group max-w-[95vw] border-t-0
+            ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}
+          `}
+        >
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-slate-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="flex items-center gap-1.5">
+            <Clock size={14} className="text-slate-400" />
+            <span className="tabular-nums font-bold">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+            {locationName && (
+              <span className="text-[10px] text-slate-400 ml-1 hidden md:inline">({locationName})</span>
+            )}
+          </div>
         
         {weather && (
           <div className="flex items-center gap-3 border-l border-slate-200 pl-4 relative group/weather">
@@ -580,6 +584,16 @@ export function WeatherWidget() {
           <button
             onClick={(e) => {
               e.stopPropagation();
+              setShowSyncAnalysis(true);
+            }}
+            className="p-1 hover:bg-slate-100 rounded-full transition-colors text-blue-500 hover:text-blue-600"
+            title="Analyse de données"
+          >
+            <CloudRain size={14} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
               toggleScale();
             }}
             className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
@@ -619,5 +633,10 @@ export function WeatherWidget() {
         </button>
       )}
     </div>
+    
+    {showSyncAnalysis && (
+      <WeatherSyncAnalysisModal onClose={() => setShowSyncAnalysis(false)} />
+    )}
+    </>
   );
 }

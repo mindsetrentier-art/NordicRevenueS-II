@@ -95,3 +95,68 @@ export const fetchHistoricalWeather = async (startDate: string, endDate: string)
     };
   }
 };
+
+export const fetchHourlyWeather = async (startDate: string, endDate: string) => {
+  try {
+    let lat = 48.8566; // Defaults to Paris if geo fails
+    let lon = 2.3522;
+    
+    try {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        const pos = await new Promise<GeolocationPosition>((res, rej) => 
+          navigator.geolocation.getCurrentPosition(res, rej, { 
+            timeout: 3000, 
+            maximumAge: 300000 
+          })
+        );
+        if (pos && pos.coords) {
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        }
+      }
+    } catch(e) {
+      console.warn("Geolocation skipped or failed, using default coordinates", e);
+    }
+
+    if (!isFinite(lat) || !isFinite(lon)) {
+      lat = 48.8566;
+      lon = 2.3522;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(today.getDate() - 2);
+    
+    const useArchive = end < twoDaysAgo;
+    const baseUrl = useArchive 
+      ? "https://archive-api.open-meteo.com/v1/archive" 
+      : "https://api.open-meteo.com/v1/forecast";
+    
+    const url = `${baseUrl}?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&hourly=precipitation,weathercode&timezone=GMT`;
+    
+    const res = await fetch(url);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.reason || `Erreur réseau (${res.status})`);
+    }
+    
+    const data = await res.json();
+    
+    if (data && data.hourly) {
+      return { 
+        data: data.hourly,
+        error: null 
+      };
+    }
+    
+    throw new Error("Données météo horaires invalides");
+  } catch (error) {
+    console.error("Erreur météo horaire:", error);
+    return { 
+      data: null, 
+      error: error instanceof Error ? error.message : "Impossible de récupérer les données horaires." 
+    };
+  }
+};

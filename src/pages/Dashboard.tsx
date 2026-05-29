@@ -59,6 +59,7 @@ import { EfficiencyBenchmark } from '../components/EfficiencyBenchmark';
 import { CostEvolutionChart } from '../components/CostEvolutionChart';
 import { WeekdayAverageChart } from '../components/WeekdayAverageChart';
 import { DailyReportStrip } from '../components/DailyReportStrip';
+import { YieldManagement } from '../components/YieldManagement';
 import { 
   ScatterChart, 
   Scatter, 
@@ -959,6 +960,15 @@ export function Dashboard() {
               {bestDay ? format(new Date(bestDay.date), 'dd MMM yyyy', { locale: fr }) : '-'}
             </p>
           </motion.div>
+        </div>
+
+        {/* Yield Management - Full Width */}
+        <div id="dashboard-yield-management" className="lg:col-span-4 xl:col-span-6">
+          <YieldManagement 
+            revenues={filteredRevenues} 
+            todayRevenue={todayRevenue} 
+            averageFoodCost={30} 
+          />
         </div>
 
         {/* Cost Evolution Breakdown - Takes more space now */}

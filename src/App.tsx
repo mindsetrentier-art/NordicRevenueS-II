@@ -18,6 +18,7 @@ import { Settings } from './pages/Settings';
 import { Alerts } from './pages/Alerts';
 import { CustomerReviews } from './pages/CustomerReviews';
 import { Guide } from './pages/Guide';
+import { MasterMap } from './pages/MasterMap';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ export default function App() {
                   <Route path="entry" element={<RevenueEntry />} />
                   <Route path="reports" element={<Reports />} />
                   <Route path="establishments" element={<Establishments />} />
+                  <Route path="master-map" element={<MasterMap />} />
                   <Route path="alerts" element={<Alerts />} />
                   <Route path="reviews" element={<CustomerReviews />} />
                   <Route path="guide" element={<Guide />} />
