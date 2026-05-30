@@ -22,6 +22,7 @@ export function PrimeCostManager({ establishmentId, onCostUpdated }: PrimeCostMa
   const [saving, setSaving] = useState(false);
   const [cost, setCost] = useState<Partial<Cost> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [totalRevenue, setTotalRevenue] = useState<number>(0);
 
   // Form states
   const [laborCost, setLaborCost] = useState<string>('0');
@@ -66,7 +67,28 @@ export function PrimeCostManager({ establishmentId, onCostUpdated }: PrimeCostMa
 
   useEffect(() => {
     fetchCost();
+    fetchRevenue();
   }, [establishmentId, selectedMonth]);
+
+  const fetchRevenue = async () => {
+    if (!establishmentId) return;
+    try {
+      const q = query(
+        collection(db, 'revenues'),
+        where('establishmentId', '==', establishmentId),
+        where('date', '>=', `${selectedMonth}-01`),
+        where('date', '<=', `${selectedMonth}-31`)
+      );
+      const snapshot = await getDocs(q);
+      let total = 0;
+      snapshot.forEach(doc => {
+        total += doc.data().total || 0;
+      });
+      setTotalRevenue(total);
+    } catch (err) {
+      console.error("Error fetching revenue for gross margin", err);
+    }
+  };
 
   const fetchCost = async () => {
     if (!establishmentId) return;
@@ -459,7 +481,7 @@ export function PrimeCostManager({ establishmentId, onCostUpdated }: PrimeCostMa
           </div>
 
           <div className="md:col-span-2 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="p-6 bg-slate-900 rounded-[2rem] text-white">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Prime Cost Total</p>
                 <p className="text-3xl font-black tracking-tight">
@@ -473,12 +495,25 @@ export function PrimeCostManager({ establishmentId, onCostUpdated }: PrimeCostMa
 
               <div className="p-6 bg-indigo-50 border border-indigo-100 rounded-[2rem]">
                 <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-4">Total Toutes Charges</p>
-                <p className="text-3xl font-black tracking-tight text-indigo-900">
+                <p className="text-2xl lg:text-3xl font-black tracking-tight text-indigo-900">
                   {((parseFloat(laborCost || '0') + parseFloat(cogs || '0') + parseFloat(otherCosts || '0') + parseFloat(rent || '0') + parseFloat(utilities || '0') + parseFloat(bankLoan || '0') + parseFloat(taxes || '0') + parseFloat(vat || '0'))).toLocaleString('fr-FR')} €
                 </p>
                 <div className="mt-4 flex items-center gap-2 text-xs text-indigo-400 font-medium">
                   <Info size={14} />
-                  <span>Prime Cost + Loyer, Taxes, etc.</span>
+                  <span>Prime Cost + Autres Charges</span>
+                </div>
+              </div>
+
+              <div className="p-6 bg-amber-50 border border-amber-100 rounded-[2rem]">
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-4">Marge Brute (Ratio)</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl lg:text-3xl font-black tracking-tight text-amber-900">
+                    {totalRevenue > 0 ? ((totalRevenue - parseFloat(cogs || '0')) / totalRevenue * 100).toFixed(1) : '0.0'}%
+                  </p>
+                </div>
+                <div className="mt-4 flex flex-col gap-1 text-xs text-amber-600/80 font-medium leading-snug">
+                  <div>CA : <span className="font-bold">{totalRevenue.toLocaleString('fr-FR')} €</span></div>
+                  <div>- Marge : <span className="font-bold">{(totalRevenue - parseFloat(cogs || '0')).toLocaleString('fr-FR')} €</span></div>
                 </div>
               </div>
             </div>

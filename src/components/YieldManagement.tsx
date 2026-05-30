@@ -100,7 +100,7 @@ export function YieldManagement({ revenues, todayRevenue, averageFoodCost = 30 }
           <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-3xl p-6">
             <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6">Prédictions de Demande & Stratégie Prix</h3>
             <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <ComposedChart data={yieldData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff15" />
                   <XAxis 

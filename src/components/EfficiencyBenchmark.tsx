@@ -60,7 +60,7 @@ export function EfficiencyBenchmark({ establishments, revenues, periodDays }: Ef
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         <div className="h-80 w-full">
-           <ResponsiveContainer width="100%" height="100%">
+           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={benchmarkData} layout="vertical" margin={{ left: 40, right: 30 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
               <XAxis type="number" hide />

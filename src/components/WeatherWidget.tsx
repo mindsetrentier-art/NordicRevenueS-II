@@ -27,6 +27,7 @@ interface WeatherData {
   windSpeed: number;
   code: number;
   isDay: boolean;
+  trend?: number[];
 }
 
 interface ForecastDay {
@@ -184,7 +185,7 @@ export function WeatherWidget() {
       // 1. Fetch Weather & Forecast
       try {
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
+          `https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&hourly=temperature_2m&timezone=auto&past_days=1&forecast_days=2`
         );
         
         if (!weatherRes.ok) throw new Error(`Weather API returned ${weatherRes.status}`);
@@ -192,13 +193,34 @@ export function WeatherWidget() {
         const weatherData = await weatherRes.json();
         
         if (weatherData.current) {
+          let trend: number[] = [];
+          if (weatherData.hourly && weatherData.hourly.time && weatherData.hourly.temperature_2m) {
+            // Find current time index in hourly
+            const currentTimeStr = weatherData.current.time || new Date().toISOString().slice(0, 13) + ':00';
+            let currentIndex = weatherData.hourly.time.findIndex((t: string) => t.startsWith(currentTimeStr.slice(0, 13)));
+            
+            // Fallback if not found exact match
+            if (currentIndex === -1) {
+              const now = new Date();
+              const nowISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 13);
+              currentIndex = weatherData.hourly.time.findIndex((t: string) => t.startsWith(nowISO));
+            }
+
+            if (currentIndex >= 5) {
+              trend = weatherData.hourly.temperature_2m.slice(currentIndex - 5, currentIndex + 1);
+            } else if (currentIndex > 0) {
+              trend = weatherData.hourly.temperature_2m.slice(0, currentIndex + 1);
+            }
+          }
+
           setWeather({
             temp: Math.round(weatherData.current.temperature_2m),
             feelsLike: Math.round(weatherData.current.apparent_temperature),
             humidity: weatherData.current.relative_humidity_2m,
             windSpeed: Math.round(weatherData.current.wind_speed_10m),
             code: weatherData.current.weather_code,
-            isDay: weatherData.current.is_day === 1
+            isDay: weatherData.current.is_day === 1,
+            trend: trend.length > 0 ? trend : undefined
           });
         }
 
@@ -418,13 +440,40 @@ export function WeatherWidget() {
                 setShowWeatherDetails(!showWeatherDetails);
                 setShowAqiDetails(false);
               }}
-              className="flex items-center gap-1.5 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer active:scale-95" 
+              className="flex items-center gap-2 hover:bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer active:scale-95" 
               title={`${getWeatherLabel(weather.code)} (Ressenti ${weather.feelsLike}°C)`}
             >
               {getWeatherIcon(weather.code, weather.isDay)}
               <div className="flex flex-col leading-none text-left">
-                <span className="tabular-nums font-bold">{weather.temp}°C</span>
-                <span className="text-[8px] text-slate-400 font-medium">Ressenti {weather.feelsLike}°</span>
+                <div className="flex items-center gap-2">
+                  <span className="tabular-nums font-bold text-sm">{weather.temp}°C</span>
+                  {weather.trend && weather.trend.length > 1 && (
+                    <div className="h-4 w-10 flex items-center" title="Tendance 6 dernères heures">
+                      <svg width="100%" height="100%" viewBox="0 0 40 16" preserveAspectRatio="none" className="overflow-visible">
+                        <polyline
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="text-slate-400"
+                          points={(() => {
+                            const min = Math.min(...weather.trend);
+                            const max = Math.max(...weather.trend);
+                            const range = max - min || 1;
+                            const points = weather.trend!.map((t, i) => {
+                              const x = (i / (weather.trend!.length - 1)) * 40;
+                              const y = 14 - ((t - min) / range) * 12; 
+                              return `${x},${y}`;
+                            }).join(' ');
+                            return points;
+                          })()}
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <span className="text-[9px] text-slate-500 font-medium tracking-tight mt-0.5">Ressenti {weather.feelsLike}°</span>
               </div>
             </button>
             <div className="flex items-center gap-1.5" title="Humidité">

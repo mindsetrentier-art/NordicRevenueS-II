@@ -169,7 +169,7 @@ export function WeatherSyncAnalysisModal({ onClose }: WeatherSyncAnalysisModalPr
                 <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
                   <h3 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">Volume des échecs vs Précipitations (mm)</h3>
                   <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                       <ComposedChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                         <XAxis 

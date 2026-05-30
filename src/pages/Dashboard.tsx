@@ -149,9 +149,14 @@ export function Dashboard() {
                 <p className="text-2xl font-black text-slate-900">
                   {data.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
-                {data.movingAverage && (
+                {data.movingAverage !== undefined && (
                   <p className="text-[10px] font-bold text-indigo-500">
                     Moy. 7j: {data.movingAverage.toLocaleString('fr-FR')} €
+                  </p>
+                )}
+                {data.wowGrowth !== undefined && (
+                  <p className={`text-[10px] font-bold ${data.wowGrowth > 0 ? 'text-emerald-500' : data.wowGrowth < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+                    {data.wowGrowth > 0 ? '+' : ''}{data.wowGrowth}% (S-1)
                   </p>
                 )}
               </div>
@@ -445,7 +450,7 @@ export function Dashboard() {
   // Sort chart data
   groupedData.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Add 7-day moving average
+  // Add 7-day moving average and WoW growth
   const chartData = groupedData.map((d, index, array) => {
     const windowSize = 7;
     const startIdx = Math.max(0, index - windowSize + 1);
@@ -453,9 +458,18 @@ export function Dashboard() {
     const sum = window.reduce((s, curr) => s + curr.total, 0);
     const movingAverage = sum / window.length;
     
+    let wowGrowth = undefined;
+    if (index >= 7) {
+      const lastWeekTotal = array[index - 7].total;
+      if (lastWeekTotal > 0) {
+        wowGrowth = Math.round(((d.total - lastWeekTotal) / lastWeekTotal) * 1000) / 10;
+      }
+    }
+    
     return {
       ...d,
-      movingAverage: Math.round(movingAverage)
+      movingAverage: Math.round(movingAverage),
+      wowGrowth
     };
   });
 
@@ -867,7 +881,7 @@ export function Dashboard() {
                   </div>
                 </div>
                 <div className="h-10 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={todayServiceData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                       <Tooltip 
                         cursor={{ fill: 'transparent' }}
@@ -1054,17 +1068,27 @@ export function Dashboard() {
                   height={70}
                   tick={<WeatherTick />}
                 />
-                <YAxis 
+                <YAxis
+                  yAxisId="left"
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
                   tickFormatter={(val) => `${val / 1000}k`}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#10b981', fontSize: 11, fontWeight: 600 }}
+                  tickFormatter={(val) => `${val > 0 ? '+' : ''}${val}%`}
                 />
                 <Tooltip 
                   cursor={{ fill: '#f8fafc', radius: 12 }}
                   content={<CustomTooltip />}
                 />
                 <Bar 
+                  yAxisId="left"
                   dataKey="midi" 
                   stackId="a"
                   fill="#fbbf24" 
@@ -1074,6 +1098,7 @@ export function Dashboard() {
                   onMouseLeave={() => setHoveredData(null)}
                 />
                 <Bar 
+                  yAxisId="left"
                   dataKey="soir" 
                   stackId="a"
                   fill="#6366f1" 
@@ -1083,12 +1108,23 @@ export function Dashboard() {
                   onMouseLeave={() => setHoveredData(null)}
                 />
                 <Line
+                  yAxisId="left"
                   type="monotone"
                   dataKey="movingAverage"
                   stroke="#4f46e5"
                   strokeWidth={3}
                   dot={false}
                   activeDot={{ r: 4, fill: '#4f46e5', stroke: '#fff', strokeWidth: 2 }}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="wowGrowth"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1174,7 +1210,7 @@ export function Dashboard() {
 
           <div className="h-80 w-full relative">
             {correlationData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
@@ -1298,7 +1334,7 @@ export function Dashboard() {
             </div>
           </div>
           <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart 
                 data={establishmentBreakdown} 
                 layout="vertical"
@@ -1341,7 +1377,7 @@ export function Dashboard() {
           <div className="h-44 w-full relative flex items-center justify-center mb-6">
             {totalPayments > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Tooltip
                       formatter={(value: any) => [`${value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`, 'Volume']}

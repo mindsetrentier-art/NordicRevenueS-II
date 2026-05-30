@@ -167,7 +167,7 @@ export function ExecutiveWall({
                 <p className="text-lg font-black uppercase tracking-widest text-slate-400">Revenue Stream Evolution</p>
               </div>
 
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <AreaChart data={chartData} margin={{ top: 100, right: 0, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="execWallGradient" x1="0" y1="0" x2="0" y2="1">
