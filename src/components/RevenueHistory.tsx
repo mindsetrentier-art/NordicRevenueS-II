@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
@@ -83,10 +83,12 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
   }, [establishmentId, refreshTrigger, filterPeriod, startDate, endDate]);
 
   const totalPages = Math.ceil(revenues.length / itemsPerPage);
-  const paginatedRevenues = revenues.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedRevenues = useMemo(() => {
+    return revenues.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [revenues, currentPage]);
 
   useEffect(() => {
     // Fetch weather when paginatedRevenues changes

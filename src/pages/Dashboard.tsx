@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -167,15 +167,19 @@ export function Dashboard() {
               <div className="space-y-2">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Services</p>
                 {data.midi > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">Midi</span>
-                    <span className="text-[10px] font-black text-amber-600">{data.midi.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-amber-600">
+                      {data.midi.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.midi / (data.total || 1)) * 100).toFixed(0)}%)</span>
+                    </span>
                   </div>
                 )}
                 {data.soir > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">Soir</span>
-                    <span className="text-[10px] font-black text-indigo-600">{data.soir.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-indigo-600">
+                      {data.soir.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.soir / (data.total || 1)) * 100).toFixed(0)}%)</span>
+                    </span>
                   </div>
                 )}
               </div>
@@ -183,33 +187,51 @@ export function Dashboard() {
               <div className="space-y-2">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Paiements</p>
                 {data.cb > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">CB</span>
-                    <span className="text-[10px] font-black text-slate-700">{data.cb.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-slate-700">
+                      {data.cb.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.cb / (data.total || 1)) * 100).toFixed(1)}%)</span>
+                    </span>
                   </div>
                 )}
                 {data.cbsc > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">CBSC</span>
-                    <span className="text-[10px] font-black text-slate-700">{data.cbsc.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-slate-700">
+                      {data.cbsc.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.cbsc / (data.total || 1)) * 100).toFixed(1)}%)</span>
+                    </span>
                   </div>
                 )}
                 {data.cash > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">Espèces</span>
-                    <span className="text-[10px] font-black text-slate-700">{data.cash.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-slate-700">
+                      {data.cash.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.cash / (data.total || 1)) * 100).toFixed(1)}%)</span>
+                    </span>
                   </div>
                 )}
                 {data.tr > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">TR</span>
-                    <span className="text-[10px] font-black text-slate-700">{data.tr.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-slate-700">
+                      {data.tr.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.tr / (data.total || 1)) * 100).toFixed(1)}%)</span>
+                    </span>
                   </div>
                 )}
                 {data.amex > 0 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold text-slate-500">Amex</span>
-                    <span className="text-[10px] font-black text-slate-700">{data.amex.toLocaleString('fr-FR')} €</span>
+                    <span className="text-[10px] font-black text-slate-700">
+                      {data.amex.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.amex / (data.total || 1)) * 100).toFixed(1)}%)</span>
+                    </span>
+                  </div>
+                )}
+                {data.transfer > 0 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-slate-500">Virement</span>
+                    <span className="text-[10px] font-black text-slate-700">
+                      {data.transfer.toLocaleString('fr-FR')} € <span className="text-slate-400 font-medium font-mono text-[9px]">({((data.transfer / (data.total || 1)) * 100).toFixed(1)}%)</span>
+                    </span>
                   </div>
                 )}
               </div>
@@ -397,17 +419,21 @@ export function Dashboard() {
     fetchDashboardData();
   }, [userProfile, startDate, endDate, selectedEst, selectedService]);
 
-  const filteredRevenues = revenues.filter(r => {
-    const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
-    const matchService = selectedService === 'all' || r.service === selectedService;
-    return matchEst && matchService;
-  });
+  const filteredRevenues = useMemo(() => {
+    return revenues.filter(r => {
+      const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
+      const matchService = selectedService === 'all' || r.service === selectedService;
+      return matchEst && matchService;
+    });
+  }, [revenues, selectedEst, selectedService]);
 
-  const filteredPrevRevenues = prevRevenues.filter(r => {
-    const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
-    const matchService = selectedService === 'all' || r.service === selectedService;
-    return matchEst && matchService;
-  });
+  const filteredPrevRevenues = useMemo(() => {
+    return prevRevenues.filter(r => {
+      const matchEst = selectedEst === 'all' || r.establishmentId === selectedEst;
+      const matchService = selectedService === 'all' || r.service === selectedService;
+      return matchEst && matchService;
+    });
+  }, [prevRevenues, selectedEst, selectedService]);
 
   // Calculate KPIs
   const totalRevenue = filteredRevenues.reduce((sum, r) => sum + r.total, 0);
@@ -417,62 +443,64 @@ export function Dashboard() {
     ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100 
     : (totalRevenue > 0 ? null : 0);
   
-  // Group by date for chart
-  const groupedData = filteredRevenues.reduce((acc, curr) => {
-    const existing = acc.find(item => item.date === curr.date);
-    if (existing) {
-      existing.total += curr.total;
-      if (curr.service === 'midi') existing.midi += curr.total;
-      if (curr.service === 'soir') existing.soir += curr.total;
-      
-      existing.cb += curr.payments.cb;
-      existing.cbsc += curr.payments.cbContactless;
-      existing.cash += curr.payments.cash;
-      existing.amex += curr.payments.amex + curr.payments.amexContactless;
-      existing.tr += curr.payments.tr + curr.payments.trContactless;
-      existing.transfer += curr.payments.transfer;
-    } else {
-      acc.push({ 
-        date: curr.date, 
-        total: curr.total,
-        midi: curr.service === 'midi' ? curr.total : 0,
-        soir: curr.service === 'soir' ? curr.total : 0,
-        cb: curr.payments.cb,
-        cbsc: curr.payments.cbContactless,
-        cash: curr.payments.cash,
-        amex: curr.payments.amex + curr.payments.amexContactless,
-        tr: curr.payments.tr + curr.payments.trContactless,
-        transfer: curr.payments.transfer
-      });
-    }
-    return acc;
-  }, [] as { date: string, total: number, midi: number, soir: number, cb: number, cbsc: number, cash: number, amex: number, tr: number, transfer: number }[]);
-
-  // Sort chart data
-  groupedData.sort((a, b) => a.date.localeCompare(b.date));
-
-  // Add 7-day moving average and WoW growth
-  const chartData = groupedData.map((d, index, array) => {
-    const windowSize = 7;
-    const startIdx = Math.max(0, index - windowSize + 1);
-    const window = array.slice(startIdx, index + 1);
-    const sum = window.reduce((s, curr) => s + curr.total, 0);
-    const movingAverage = sum / window.length;
-    
-    let wowGrowth = undefined;
-    if (index >= 7) {
-      const lastWeekTotal = array[index - 7].total;
-      if (lastWeekTotal > 0) {
-        wowGrowth = Math.round(((d.total - lastWeekTotal) / lastWeekTotal) * 1000) / 10;
+  // Group by date and calculate moving averages for chart (memoized to keep reference stable)
+  const chartData = useMemo(() => {
+    const grouped = filteredRevenues.reduce((acc, curr) => {
+      const existing = acc.find(item => item.date === curr.date);
+      if (existing) {
+        existing.total += curr.total;
+        if (curr.service === 'midi') existing.midi += curr.total;
+        if (curr.service === 'soir') existing.soir += curr.total;
+        
+        existing.cb += curr.payments.cb;
+        existing.cbsc += curr.payments.cbContactless;
+        existing.cash += curr.payments.cash;
+        existing.amex += curr.payments.amex + curr.payments.amexContactless;
+        existing.tr += curr.payments.tr + curr.payments.trContactless;
+        existing.transfer += curr.payments.transfer;
+      } else {
+        acc.push({ 
+          date: curr.date, 
+          total: curr.total,
+          midi: curr.service === 'midi' ? curr.total : 0,
+          soir: curr.service === 'soir' ? curr.total : 0,
+          cb: curr.payments.cb,
+          cbsc: curr.payments.cbContactless,
+          cash: curr.payments.cash,
+          amex: curr.payments.amex + curr.payments.amexContactless,
+          tr: curr.payments.tr + curr.payments.trContactless,
+          transfer: curr.payments.transfer
+        });
       }
-    }
-    
-    return {
-      ...d,
-      movingAverage: Math.round(movingAverage),
-      wowGrowth
-    };
-  });
+      return acc;
+    }, [] as { date: string, total: number, midi: number, soir: number, cb: number, cbsc: number, cash: number, amex: number, tr: number, transfer: number }[]);
+
+    // Sort chart data
+    grouped.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Add 7-day moving average and WoW growth
+    return grouped.map((d, index, array) => {
+      const windowSize = 7;
+      const startIdx = Math.max(0, index - windowSize + 1);
+      const window = array.slice(startIdx, index + 1);
+      const sum = window.reduce((s, curr) => s + curr.total, 0);
+      const movingAverage = sum / window.length;
+      
+      let wowGrowth = undefined;
+      if (index >= 7) {
+        const lastWeekTotal = array[index - 7].total;
+        if (lastWeekTotal > 0) {
+          wowGrowth = Math.round(((d.total - lastWeekTotal) / lastWeekTotal) * 1000) / 10;
+        }
+      }
+      
+      return {
+        ...d,
+        movingAverage: Math.round(movingAverage),
+        wowGrowth
+      };
+    });
+  }, [filteredRevenues]);
 
   // Correlation data for scatter plot
   const correlationData = chartData.map(d => {
@@ -1386,7 +1414,10 @@ export function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Tooltip
-                      formatter={(value: any) => [`${value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`, 'Volume']}
+                      formatter={(value: any, name: any) => {
+                        const pct = totalPayments > 0 ? ((value / totalPayments) * 100).toFixed(1) : '0';
+                        return [`${value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} (${pct}%)`, name];
+                      }}
                       contentStyle={{ 
                         borderRadius: '16px', 
                         border: 'none', 

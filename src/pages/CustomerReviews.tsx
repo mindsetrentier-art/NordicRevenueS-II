@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, MessageSquare, ThumbsUp, ThumbsDown, AlertCircle, Loader2 } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
 import clsx from 'clsx';
-
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 interface AnalysisResult {
   summary: string;
@@ -25,48 +21,28 @@ export function CustomerReviews() {
       return;
     }
 
-    if (!ai) {
-      setError("Clé API Gemini manquante. Veuillez configurer la variable d'environnement VITE_GEMINI_API_KEY.");
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const prompt = `
-        Tu es un expert en expérience client pour la restauration et le commerce.
-        Analyse les avis clients suivants et fournis un résumé concis.
-        
-        Avis clients :
-        """
-        ${reviewsText}
-        """
-        
-        Réponds UNIQUEMENT avec un objet JSON valide (sans markdown, sans \`\`\`json) ayant exactement cette structure :
-        {
-          "summary": "Un résumé global de 2 à 3 phrases maximum.",
-          "sentiment": "positif" | "neutre" | "négatif",
-          "strengths": ["Point fort 1", "Point fort 2"],
-          "weaknesses": ["Point faible 1", "Point faible 2"]
-        }
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+      const response = await fetch('/api/analyze-reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reviewsText })
       });
 
-      let text = response.text || "";
-      // Nettoyer la réponse si elle contient des balises markdown
-      text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      
-      const parsedResult = JSON.parse(text) as AnalysisResult;
+      if (!response.ok) {
+        throw new Error("L'import d'analyse a échoué.");
+      }
+
+      const parsedResult = await response.json() as AnalysisResult;
       setResult(parsedResult);
     } catch (err: any) {
       console.error("Erreur IA:", err);
-      setError("Une erreur s'est produite lors de l'analyse. Assurez-vous que le texte fourni est compréhensible.");
+      setError("Une erreur s'est produite lors de l'analyse IA. Veuillez réessayer plus tard.");
     } finally {
       setLoading(false);
     }

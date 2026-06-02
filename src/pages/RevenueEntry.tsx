@@ -332,58 +332,26 @@ export function RevenueEntry() {
   const processSmartVoice = async (transcript: string) => {
     setIsProcessingVoice(true);
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn("Gemini API key missing for Voice processing");
-        return;
-      }
-      const { GoogleGenAI } = await import('@google/genai');
-      const ai = new GoogleGenAI({ apiKey });
-
-      const prompt = `
-        Tu es un assistant expert en saisie de revenus pour un restaurant. 
-        À partir de la transcription vocale suivante, extrais les montants pour chaque service (midi/soir) et chaque mode de paiement.
-        
-        Modes de paiement disponibles :
-        - cb (Carte Bancaire classique)
-        - cbContactless (CB Sans Contact)
-        - cash (Espèces)
-        - amex (American Express)
-        - amexContactless (AMEX Sans Contact)
-        - tr (Titres Restaurant papier)
-        - trContactless (TR Dématérialisé/Carte)
-        - transfer (Virement)
-
-        Transcription : "${transcript}"
-
-        Renvoie UNIQUEMENT un objet JSON avec cette structure (ne mets que les champs trouvés) :
-        {
-          "midi": { "cb": 45.50, "cash": 10 },
-          "soir": { "amex": 120.00 }
-        }
-        
-        Si l'utilisateur ne précise pas midi ou soir, suppose que c'est pour le service actif actuel (isMidiActive=${isMidiActive ? 'OUI' : 'NON'}, isSoirActive=${isSoirActive ? 'OUI' : 'NON'}).
-        Réponds uniquement en JSON.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
+      const response = await fetch('/api/process-voice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ transcript, isMidiActive, isSoirActive })
       });
 
-      const text = response.text || '';
-      const jsonMatch = text.match(/\{.*\}/s);
-      
-      if (jsonMatch) {
-        const data = JSON.parse(jsonMatch[0]);
-        if (data.midi) {
-          setPaymentsMidi(prev => ({ ...prev, ...data.midi }));
-          if (!isMidiActive) setIsMidiActive(true);
-        }
-        if (data.soir) {
-          setPaymentsSoir(prev => ({ ...prev, ...data.soir }));
-          if (!isSoirActive) setIsSoirActive(true);
-        }
+      if (!response.ok) {
+        throw new Error("Erreur lors du traitement Smart Voice.");
+      }
+
+      const data = await response.json();
+      if (data.midi) {
+        setPaymentsMidi(prev => ({ ...prev, ...data.midi }));
+        if (!isMidiActive) setIsMidiActive(true);
+      }
+      if (data.soir) {
+        setPaymentsSoir(prev => ({ ...prev, ...data.soir }));
+        if (!isSoirActive) setIsSoirActive(true);
       }
     } catch (err) {
       console.error("Smart Voice Processing Error:", err);
@@ -1200,48 +1168,28 @@ function ServiceSection({
     if (imageFile) {
       setIsExtracting(true);
       try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-          console.warn("Gemini API key missing for Vision extraction");
-          return;
-        }
-        const { GoogleGenAI } = await import('@google/genai');
-        const ai = new GoogleGenAI({ apiKey });
-
         const reader = new FileReader();
         reader.readAsDataURL(imageFile);
         await new Promise(resolve => reader.onload = resolve);
         const base64Data = (reader.result as string).split(',')[1];
 
-        const prompt = `
-          Tu es un assistant comptable expert. Analyse ce reçu/facture.
-          Extrais les informations suivantes au format JSON strict :
-          - "total": le montant total TTC (nombre flottant, ex: 120.50)
-          - "vat": le montant de la TVA (nombre flottant, 0 si non trouvé)
-          - "date": la date du reçu au format YYYY-MM-DD (chaîne vide si non trouvée)
-          - "method": la méthode de paiement probable ("cb", "cash", "tr", ou null)
-          
-          Ne renvoie QUE le JSON, sans aucun markdown ni texte autour.
-        `;
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: [
-            prompt,
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: imageFile.type
-              }
-            }
-          ]
+        const response = await fetch('/api/extract-receipt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            base64Data,
+            mimeType: imageFile.type
+          })
         });
 
-        const text = response.text || '';
-        const jsonMatch = text.match(/\{.*\}/s);
-        if (jsonMatch) {
-          const data = JSON.parse(jsonMatch[0]);
-          
+        if (!response.ok) {
+          throw new Error("L'extraction du reçu a échoué.");
+        }
+
+        const data = await response.json();
+        if (data) {
           let notesAddition = `[IA] Reçu scanné : Total ${data.total}€`;
           if (data.vat) notesAddition += ` (dont TVA ${data.vat}€)`;
           

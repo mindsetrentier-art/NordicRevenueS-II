@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Newspaper, X, Globe, TrendingUp, Clock, Loader2, ChevronRight, ChevronLeft, ExternalLink, Play, Pause } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
 import clsx from 'clsx';
 
 interface NewsItem {
@@ -40,11 +39,23 @@ export function NewsTicker() {
   const fetchNews = async (lang: 'fr' | 'zh' | 'en' = language) => {
     setLoading(true);
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) return;
-      
-      const ai = new GoogleGenAI({ apiKey });
-      
+      const response = await fetch('/api/news', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ lang })
+      });
+
+      if (!response.ok) {
+        throw new Error("Erreur de récupération des actualités.");
+      }
+
+      const parsedNews = await response.json();
+      setNews(parsedNews);
+      return;
+
+      const ai: any = null;
       const now = new Date();
       const dateStr = now.toLocaleString(lang === 'fr' ? 'fr-FR' : lang === 'zh' ? 'zh-CN' : 'en-US', { 
         weekday: 'long', 
@@ -91,15 +102,7 @@ export function NewsTicker() {
         `;
       }
 
-      const response = await (ai as any).models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: prompt,
-      });
-
-      const text = response.text || "";
-      const cleanedText = text.replace(/```json|```/g, '').trim();
-      const parsedNews = JSON.parse(cleanedText);
-      setNews(parsedNews);
+      console.warn("Legacy live news fetch skipped.");
     } catch (error: any) {
       // Handle rate limits and other errors gracefully without polluting the console
       if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED')) {

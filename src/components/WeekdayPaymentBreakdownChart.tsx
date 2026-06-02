@@ -100,7 +100,17 @@ export function WeekdayPaymentBreakdownChart({ revenues }: WeekdayPaymentBreakdo
             />
             <Tooltip 
               cursor={{ fill: 'rgba(99, 102, 241, 0.05)', radius: 12 }}
-              formatter={(value: any) => [`${Number(value).toLocaleString('fr-FR')} €`]}
+              formatter={(value: any, name: any, props: any) => {
+                const payload = props?.payload || {};
+                const total = 
+                  (payload['Carte Bancaire'] || 0) + 
+                  (payload['Tickets Resto'] || 0) + 
+                  (payload['Espèces'] || 0) + 
+                  (payload['AMEX'] || 0) + 
+                  (payload['Virement'] || 0);
+                const percent = total > 0 ? ((Number(value) / total) * 100).toFixed(1) : '0';
+                return [`${Number(value).toLocaleString('fr-FR')} € (${percent}%)`, name];
+              }}
               contentStyle={{
                 backgroundColor: '#fff',
                 border: '1px solid #e2e8f0',

@@ -28,7 +28,6 @@ import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
 import { Logo } from '../components/Logo';
 import { SearchableSelect } from '../components/SearchableSelect';
-import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import { utils, writeFile } from 'xlsx';
 
@@ -1168,50 +1167,38 @@ export function Reports() {
   const generateAiAnalysis = async () => {
     setIsGeneratingAnalysis(true);
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API Key missing");
-      const ai = new GoogleGenAI({ apiKey });
-      
       const bestDayAmount = chartData.length > 0 ? Math.max(...chartData.map(r => r.total)) : 0;
-      
       const paymentStats = paymentTotals.map(p => `${p.name}: ${p.value.toFixed(2)}€`).join(', ');
-      
       const dailyDetails = chartData.map(d => 
         `${d.date}: Total ${d.total.toFixed(2)}€ (CB: ${d.cb.toFixed(2)}€, Espèces: ${d.cash.toFixed(2)}€, TR: ${d.tr.toFixed(2)}€, AMEX: ${d.amex.toFixed(2)}€)`
       ).join('\n        ');
-      
-      const prompt = `
-        Tu es un analyste financier expert. Rédige une analyse concise et actionnable pour ce rapport de recettes.
-        
-        Données de la période :
-        - Établissement : ${selectedEst === 'all' ? 'Tous' : establishments.find(e => e.id === selectedEst)?.name}
-        - Période : du ${startDate} au ${endDate}
-        - Chiffre d'affaires total : ${totalRevenue.toFixed(2)}€ (Période précédente : ${compTotalRevenue.toFixed(2)}€)
-        - Moyenne par jour : ${avgRevenue.toFixed(2)}€
-        - Meilleure journée : ${bestDayAmount.toFixed(2)}€
-        - Répartition par moyen de paiement : ${paymentStats}
-        
-        Détail journalier :
-        ${dailyDetails}
-        
-        Instructions :
-        1. Analyse brièvement les tendances (hausse/baisse, saisonnalité).
-        2. Identifie les points forts et les anomalies.
-        3. Donne 3 conseils concrets et actionnables pour améliorer les revenus ou optimiser les paiements.
-        
-        Format : 
-        - Sois très concis (maximum 250 mots).
-        - Utilise des listes à puces pour les conseils.
-        - Ton professionnel et direct.
-        - Ne mets pas de titre principal.
-      `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
+      const estName = selectedEst === 'all' ? 'Tous' : establishments.find(e => e.id === selectedEst)?.name;
+
+      const response = await fetch('/api/generate-report-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          estName,
+          startDate,
+          endDate,
+          totalRevenue,
+          compTotalRevenue,
+          avgRevenue,
+          bestDayAmount,
+          paymentStats,
+          dailyDetails
+        })
       });
 
-      setAiAnalysisContent(response.text || "Analyse non disponible.");
+      if (!response.ok) {
+        throw new Error("Impossible d'obtenir l'analyse financière.");
+      }
+
+      const result = await response.json();
+      setAiAnalysisContent(result.analysis || "Analyse non disponible.");
     } catch (error) {
       console.error("Error generating AI analysis:", error);
       setAiAnalysisContent("Erreur lors de la génération de l'analyse. Veuillez réessayer.");

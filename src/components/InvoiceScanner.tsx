@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, X, Loader2, Scan, CheckCircle, AlertCircle } from 'lucide-react';
-import { GoogleGenAI, Type } from '@google/genai';
 
 interface ScanResult {
   category: 'cogs' | 'utilities' | 'rent' | 'taxes' | 'otherCosts';
@@ -54,56 +53,22 @@ export function InvoiceScanner({ onScanComplete, onClose }: InvoiceScannerProps)
 
   const extractInvoiceData = async (base64Data: string, mimeType: string) => {
     try {
-      // In Vite, we should use import.meta.env for client-side API keys, but the instruction from the system skill says:
-      // React (Vite): const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      // BUT, in a Vite client app without 'process', process.env doesn't work out of the box unless it's defined. Wait, if it's imported this way, it might be. Wait, AI Studio environment says:
-      // "Always use process.env.GEMINI_API_KEY for the Gemini API." Wait, I shouldn't use import.meta.env for GEMINI_API_KEY!
-      
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType
-              }
-            },
-            "Extrait les informations financières de cette facture. Classe la dépense dans l'une de ces catégories : 'cogs' (matières premières, fournitures pour restaurants comme Metro, Transgourmet, etc.), 'utilities' (électricité, gaz, eau), 'rent' (loyer), 'taxes' (impôts, taxes diverses), 'otherCosts' (autres dépenses). Retourne uniquement les montants sous format numérique (ex: 15.50)."
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              category: {
-                type: Type.STRING,
-                description: "La catégorie de la dépense. Doit être l'exacte valeur 'cogs', 'utilities', 'rent', 'taxes', ou 'otherCosts'.",
-              },
-              totalHT: {
-                type: Type.NUMBER,
-                description: "Le montant total Hors Taxes (HT).",
-              },
-              vat: {
-                type: Type.NUMBER,
-                description: "Le montant de la TVA.",
-              },
-              totalTTC: {
-                type: Type.NUMBER,
-                description: "Le montant total Toutes Taxes Comprises (TTC).",
-              }
-            },
-            required: ['category', 'totalHT', 'vat', 'totalTTC']
-          }
-        }
+      const response = await fetch('/api/scan-invoice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          base64Data,
+          mimeType
+        })
       });
 
-      if (!response.text) {
+      if (!response.ok) {
         throw new Error("L'IA n'a pas renvoyé de réponse valide.");
       }
 
-      const result: ScanResult = JSON.parse(response.text.trim());
+      const result = await response.json() as ScanResult;
       
       // Cleanup Object URL
       if (previewUrl) {

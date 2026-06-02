@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { HelpCircle, X, ChevronRight, RefreshCw, GripVertical, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -85,39 +84,24 @@ export function QuizSidebar() {
     setLoading(true);
     setError(null);
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("API Key missing");
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      const categories = ['geography', 'psychology', 'history', 'mathematics', 'medicine', 'science', 'biology'];
-      const category = categories[Math.floor(Math.random() * categories.length)];
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Generate a random quiz question in the category of ${category}. 
-        Provide the question and answer in both French and Chinese (Simplified).
-        The answer should be short (1-3 words).
-        Return ONLY a JSON object with the following structure:
-        {
-          "questionFr": "...",
-          "questionZh": "...",
-          "answerFr": "...",
-          "answerZh": "...",
-          "category": "..."
-        }`,
-        config: {
-          responseMimeType: "application/json"
+      const response = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         }
       });
 
-      const data = JSON.parse(response.text || '{}');
+      if (!response.ok) {
+        throw new Error("Erreur de récupération du questionnaire.");
+      }
+
+      const data = await response.json();
       if (data.questionFr) {
         setQuiz(data);
         localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
         localStorage.removeItem(QUOTA_ERROR_KEY); // Clear error on success
       } else {
-        throw new Error("Invalid data");
+        throw new Error("Données invalides");
       }
     } catch (err: any) {
       console.error("Error fetching quiz:", err);
