@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { format, parse, subMonths, addMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -17,7 +17,9 @@ export function DatePicker({ date, onChange, className }: DatePickerProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Parse YYYY-MM-DD string to Date object
-  const selectedDate = date ? parse(date, 'yyyy-MM-dd', new Date()) : new Date();
+  const selectedDate = useMemo(() => {
+    return date ? parse(date, 'yyyy-MM-dd', new Date()) : new Date();
+  }, [date]);
   
   const [month, setMonth] = useState<Date>(selectedDate);
 
@@ -103,7 +105,9 @@ export function DatePicker({ date, onChange, className }: DatePickerProps) {
           <div className="flex items-center justify-between mt-2 pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setMonth(subMonths(month, 1))}
+              onClick={() => {
+                setMonth(prevMonth => subMonths(prevMonth, 1));
+              }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-900 rounded-lg transition-colors"
             >
               <ChevronLeft size={14} /> Mois préc.
@@ -117,7 +121,9 @@ export function DatePicker({ date, onChange, className }: DatePickerProps) {
             </button>
             <button
               type="button"
-              onClick={() => setMonth(addMonths(month, 1))}
+              onClick={() => {
+                setMonth(prevMonth => addMonths(prevMonth, 1));
+              }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-900 rounded-lg transition-colors"
             >
               Mois suiv. <ChevronRight size={14} />

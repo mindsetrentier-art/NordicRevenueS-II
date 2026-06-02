@@ -62,6 +62,7 @@ export interface Revenue {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  isEdited?: boolean;
 }
 
 export interface Badge {

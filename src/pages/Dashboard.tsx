@@ -58,6 +58,7 @@ import { ExecutiveWall } from '../components/ExecutiveWall';
 import { EfficiencyBenchmark } from '../components/EfficiencyBenchmark';
 import { CostEvolutionChart } from '../components/CostEvolutionChart';
 import { WeekdayAverageChart } from '../components/WeekdayAverageChart';
+import { WeekdayPaymentBreakdownChart } from '../components/WeekdayPaymentBreakdownChart';
 import { DailyReportStrip } from '../components/DailyReportStrip';
 import { YieldManagement } from '../components/YieldManagement';
 import { 
@@ -1188,6 +1189,11 @@ export function Dashboard() {
         {/* Weekday Performance Average */}
         <div id="dashboard-weekday-average" className="lg:col-span-4 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
           <WeekdayAverageChart revenues={filteredRevenues} />
+        </div>
+
+        {/* Weekday Payments Breakdown */}
+        <div id="dashboard-weekday-payments" className="lg:col-span-4 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+          <WeekdayPaymentBreakdownChart revenues={filteredRevenues} />
         </div>
 
         {/* Daily Detailed Report Strip */}

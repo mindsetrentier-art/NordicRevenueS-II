@@ -32,9 +32,11 @@ import {
   Loader2,
   Sparkles,
   Cloud,
-  HelpCircle
+  HelpCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subDays, addDays, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { Calculator } from '../components/Calculator';
@@ -867,10 +869,46 @@ export function RevenueEntry() {
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Date d'exploitation</label>
-            <DatePicker 
-              date={date} 
-              onChange={setDate} 
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const prev = subDays(parseISO(date), 1);
+                    setDate(format(prev, 'yyyy-MM-dd'));
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 active:scale-95 transition-all text-slate-650 rounded-xl cursor-pointer"
+                title="Jour précédent"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              
+              <div className="flex-1">
+                <DatePicker 
+                  date={date} 
+                  onChange={setDate} 
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const next = addDays(parseISO(date), 1);
+                    setDate(format(next, 'yyyy-MM-dd'));
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 active:scale-95 transition-all text-slate-650 rounded-xl cursor-pointer"
+                title="Jour suivant"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
           </div>
           <div className="md:col-span-2 pt-4 border-t border-slate-100 flex items-start gap-4">
              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">

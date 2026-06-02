@@ -152,10 +152,11 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
         notes: editingRevenue.notes || '',
         attachments: finalAttachments,
         total: total,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        isEdited: true
       });
       
-      setRevenues(prev => prev.map(r => r.id === editingRevenue.id ? { ...editingRevenue, attachments: finalAttachments, total } : r));
+      setRevenues(prev => prev.map(r => r.id === editingRevenue.id ? { ...editingRevenue, attachments: finalAttachments, total, isEdited: true } : r));
       setEditingRevenue(null);
       setNewFiles([]);
     } catch (error) {
@@ -258,8 +259,19 @@ export function RevenueHistory({ establishmentId, refreshTrigger }: RevenueHisto
                 return (
                 <tr key={revenue.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="py-3 px-4">
-                    <div className="font-medium text-slate-900 pb-1">
-                      {format(parseISO(revenue.date), 'dd MMM yyyy', { locale: fr })}
+                    <div className="flex items-center gap-2 pb-1">
+                      <span className="font-medium text-slate-900">
+                        {format(parseISO(revenue.date), 'dd MMM yyyy', { locale: fr })}
+                      </span>
+                      {revenue.isEdited && (
+                        <span 
+                          className="inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full cursor-help select-none"
+                          title="Cette saisie a été modifiée manuellement après sa création"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          Modifié
+                        </span>
+                      )}
                     </div>
                     {weather ? (
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
