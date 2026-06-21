@@ -16,6 +16,7 @@ import {
   Landmark,
   Save,
   CheckCircle2,
+  Calendar as CalendarIcon,
   Sun,
   Moon,
   Calculator as CalculatorIcon,
@@ -37,6 +38,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { format, subDays, addDays, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { Calculator } from '../components/Calculator';
@@ -63,6 +65,7 @@ export function RevenueEntry() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [selectedEst, setSelectedEst] = useState<string>('');
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [currentStep, setCurrentStep] = useState<number>(1);
   
   const [paymentsMidi, setPaymentsMidi] = useState<Payments>(INITIAL_PAYMENTS);
   const [paymentsSoir, setPaymentsSoir] = useState<Payments>(INITIAL_PAYMENTS);
@@ -503,7 +506,7 @@ export function RevenueEntry() {
         // Only set selectedEst if it's not already set to avoid resetting user selection on refresh
         setEstablishments(prev => {
           if (estData.length > 0) {
-            setSelectedEst(current => current || estData[0].id);
+            setSelectedEst(current => current || (estData.length === 1 ? estData[0].id : ''));
           }
           return estData;
         });
@@ -679,6 +682,8 @@ export function RevenueEntry() {
       setNotesSoir('');
       setAttachmentsMidi([]);
       setAttachmentsSoir([]);
+      setSelectedEst(establishments.length === 1 ? establishments[0].id : '');
+      setCurrentStep(1);
       setRefreshTrigger(prev => prev + 1);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -733,65 +738,156 @@ export function RevenueEntry() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saisie des Recettes</h1>
           <p className="text-slate-500 text-sm mt-1">Enregistrez les encaissements pour les services du midi et du soir.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {currentStep === 3 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleSmartVoice}
+              disabled={isProcessingVoice}
+              className={clsx(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
+                isSmartVoiceActive 
+                  ? "bg-red-500 text-white shadow-lg shadow-red-500/20" 
+                  : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+              )}
+            >
+              {isProcessingVoice ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
+              <span className="hidden sm:inline">Dictée Intelligente</span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleSmartSync}
+              disabled={isSyncing}
+              className={clsx(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
+                userProfile?.posProvider 
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" 
+                  : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600"
+              )}
+            >
+              {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Cloud size={18} />}
+              <span className="hidden sm:inline">
+                {userProfile?.posProvider ? `Sync ${userProfile.posProvider}` : "Smart Sync (POS)"}
+              </span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => setIsRushMode(!isRushMode)}
+              className={clsx(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
+                isRushMode 
+                  ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" 
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              )}
+            >
+              {isRushMode ? <Zap size={20} className="animate-pulse" /> : <ZapOff size={20} />}
+              <span className="hidden sm:inline">{isRushMode ? "Mode Rush Actif" : "Mode Service Intense"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
+              className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-colors shadow-sm ${
+                isCalculatorOpen 
+                  ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <CalculatorIcon size={20} />
+              <span className="hidden sm:inline">Calculatrice</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Step Navigation Bar */}
+      <div className="bg-white px-6 py-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-300">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+            <Sparkles size={18} className="animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-800">Saisie Progressive des Recettes</h2>
+            <p className="text-[11px] text-slate-500 font-medium">Suivez les étapes sécurisées pour éviter d'oublier la date.</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 md:gap-4">
+          {/* Step 1 */}
           <button
             type="button"
-            onClick={toggleSmartVoice}
-            disabled={isProcessingVoice}
+            onClick={() => {
+              if (currentStep > 1) setCurrentStep(1);
+            }}
+            disabled={currentStep === 1}
             className={clsx(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
-              isSmartVoiceActive 
-                ? "bg-red-500 text-white shadow-lg shadow-red-500/20" 
-                : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+              "flex items-center gap-2 text-left bg-transparent border-none p-0 outline-none transition-all",
+              currentStep > 1 ? "cursor-pointer hover:opacity-80" : "cursor-default"
             )}
           >
-            {isProcessingVoice ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
-            <span className="hidden sm:inline">Dictée Intelligente</span>
-          </button>
-          
-          <button
-            type="button"
-            onClick={handleSmartSync}
-            disabled={isSyncing}
-            className={clsx(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
-              userProfile?.posProvider 
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" 
-                : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600"
-            )}
-          >
-            {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Cloud size={18} />}
-            <span className="hidden sm:inline">
-              {userProfile?.posProvider ? `Sync ${userProfile.posProvider}` : "Smart Sync (POS)"}
-            </span>
-          </button>
-          
-          <button
-            type="button"
-            onClick={() => setIsRushMode(!isRushMode)}
-            className={clsx(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 shadow-sm",
-              isRushMode 
-                ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" 
-                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-            )}
-          >
-            {isRushMode ? <Zap size={20} className="animate-pulse" /> : <ZapOff size={20} />}
-            <span className="hidden sm:inline">{isRushMode ? "Mode Rush Actif" : "Mode Service Intense"}</span>
+            <div className={clsx(
+              "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+              currentStep > 1 
+                ? "bg-emerald-500 text-white" 
+                : "bg-blue-600 text-white ring-4 ring-blue-100"
+            )}>
+              {currentStep > 1 ? "✓" : "1"}
+            </div>
+            <div className="hidden sm:block">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Étape 1</p>
+              <p className={clsx("text-xs font-black", currentStep === 1 ? "text-blue-600" : "text-slate-850")}>Date</p>
+            </div>
           </button>
 
+          <div className="w-6 md:w-10 h-0.5 bg-slate-200" />
+
+          {/* Step 2 */}
           <button
             type="button"
-            onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
-            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-colors shadow-sm ${
-              isCalculatorOpen 
-                ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
+            onClick={() => {
+              if (currentStep > 2) setCurrentStep(2);
+            }}
+            disabled={currentStep <= 2}
+            className={clsx(
+              "flex items-center gap-2 text-left bg-transparent border-none p-0 outline-none transition-all",
+              currentStep > 2 ? "cursor-pointer hover:opacity-80" : "cursor-default"
+            )}
           >
-            <CalculatorIcon size={20} />
-            <span className="hidden sm:inline">Calculatrice</span>
+            <div className={clsx(
+              "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+              currentStep > 2 
+                ? "bg-emerald-500 text-white" 
+                : currentStep === 2 
+                  ? "bg-blue-600 text-white ring-4 ring-blue-100"
+                  : "bg-slate-100 text-slate-400"
+            )}>
+              {currentStep > 2 ? "✓" : "2"}
+            </div>
+            <div className="hidden sm:block">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Étape 2</p>
+              <p className={clsx("text-xs font-black", currentStep === 2 ? "text-blue-600" : "text-slate-500")}>Établissement</p>
+            </div>
           </button>
+
+          <div className="w-6 md:w-10 h-0.5 bg-slate-200" />
+
+          {/* Step 3 */}
+          <div className="flex items-center gap-2 text-left">
+            <div className={clsx(
+              "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+              currentStep === 3 
+                ? "bg-blue-600 text-white ring-4 ring-blue-100" 
+                : "bg-slate-100 text-slate-400"
+            )}>
+              3
+            </div>
+            <div className="hidden sm:block">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Étape 3</p>
+              <p className={clsx("text-xs font-black", currentStep === 3 ? "text-blue-600" : "text-slate-500")}>Recettes</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -809,76 +905,171 @@ export function RevenueEntry() {
                <Sparkles size={120} className="text-blue-600" />
             </div>
           </div>
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-semibold text-slate-700">Établissement</label>
-              <button
-                type="button"
-                onClick={handleGeolocate}
-                disabled={isGeolocating || establishments.length === 0}
-                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
-              >
-                <MapPin size={12} />
-                {isGeolocating ? 'Localisation...' : 'Plus proche'}
-              </button>
-            </div>
-            {establishments.length === 0 ? (
-              <div className="text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200 text-sm">
-                Aucun établissement disponible. Veuillez en créer un dans les paramètres.
+          
+          {/* 2. Établissement Block */}
+          <div className={clsx(
+            "relative z-10 transition-all duration-300", 
+            currentStep === 1 && "hidden", 
+            currentStep === 2 && "md:col-span-2 max-w-xl mx-auto w-full py-4"
+          )}>
+            {currentStep === 3 ? (
+              <div className="flex items-center justify-between p-4 bg-blue-50/40 border border-blue-100/60 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-600 text-white rounded-lg">
+                    <MapPin size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">Établissement sélectionné</p>
+                    <p className="text-sm font-black text-slate-800">
+                      {currentEst?.name || "Non spécifié"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                >
+                  Modifier
+                </button>
               </div>
             ) : (
-              <SearchableSelect
-                options={establishments.map(est => ({ id: est.id, name: est.name }))}
-                value={selectedEst}
-                onChange={setSelectedEst}
-                placeholder="Sélectionnez un établissement"
-              />
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-slate-700">Étape 2 : Sélectionnez l'établissement</label>
+                  <button
+                    type="button"
+                    onClick={handleGeolocate}
+                    disabled={isGeolocating || establishments.length === 0}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <MapPin size={12} />
+                    {isGeolocating ? 'Localisation...' : 'Plus proche'}
+                  </button>
+                </div>
+                {establishments.length === 0 ? (
+                  <div className="text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200 text-sm">
+                    Aucun établissement disponible. Veuillez en créer un dans les paramètres.
+                  </div>
+                ) : (
+                  <SearchableSelect
+                    options={establishments.map(est => ({ id: est.id, name: est.name }))}
+                    value={selectedEst}
+                    onChange={setSelectedEst}
+                    placeholder="Sélectionnez un établissement"
+                  />
+                )}
+
+                {currentStep === 2 && (
+                  <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(1)}
+                      className="w-full sm:w-1/2 px-5 py-3 border border-slate-200 text-slate-650 hover:bg-slate-50 font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      Retour
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedEst}
+                      onClick={() => setCurrentStep(3)}
+                      className="w-full sm:w-1/2 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md shadow-blue-600/10 cursor-pointer active:scale-[0.99]"
+                    >
+                      <Check size={18} strokeWidth={2.5} /> Confirmer l'établissement
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Date d'exploitation</label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    const prev = subDays(parseISO(date), 1);
-                    setDate(format(prev, 'yyyy-MM-dd'));
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 active:scale-95 transition-all text-slate-650 rounded-xl cursor-pointer"
-                title="Jour précédent"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              
-              <div className="flex-1">
-                <DatePicker 
-                  date={date} 
-                  onChange={setDate} 
-                />
+          
+          {/* 3. Date Block */}
+          <div className={clsx(
+            "transition-all duration-300", 
+            currentStep === 1 && "md:col-span-2 max-w-xl mx-auto w-full py-4 text-center",
+            currentStep === 2 && "hidden"
+          )}>
+            {currentStep === 3 ? (
+              <div className="flex items-center justify-between p-4 bg-blue-50/40 border border-blue-100/60 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-600 text-white rounded-lg">
+                    <CalendarIcon size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">Date d'exploitation</p>
+                    <p className="text-sm font-black text-slate-800">
+                      {format(parseISO(date), "d MMMM yyyy", { locale: fr })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                >
+                  Modifier
+                </button>
               </div>
+            ) : (
+              <>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Étape 1 : Choisissez la date d'exploitation</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const prev = subDays(parseISO(date), 1);
+                        setDate(format(prev, 'yyyy-MM-dd'));
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 active:scale-95 transition-all text-slate-650 rounded-xl cursor-pointer"
+                    title="Jour précédent"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  
+                  <div className="flex-1">
+                    <DatePicker 
+                      date={date} 
+                      onChange={setDate} 
+                    />
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    const next = addDays(parseISO(date), 1);
-                    setDate(format(next, 'yyyy-MM-dd'));
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 active:scale-95 transition-all text-slate-650 rounded-xl cursor-pointer"
-                title="Jour suivant"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const next = addDays(parseISO(date), 1);
+                        setDate(format(next, 'yyyy-MM-dd'));
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="p-3 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 active:scale-95 transition-all text-slate-650 rounded-xl cursor-pointer"
+                    title="Jour suivant"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+
+                {currentStep === 1 && (
+                  <div className="mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(2)}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md shadow-blue-600/10 active:scale-[0.99] cursor-pointer"
+                    >
+                      <Check size={18} strokeWidth={2.5} /> Valider la date et continuer
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          <div className="md:col-span-2 pt-4 border-t border-slate-100 flex items-start gap-4">
+          
+          <div className={clsx("md:col-span-2 pt-4 border-t border-slate-100 flex items-start gap-4", currentStep < 3 && "hidden")}>
              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                 <Sparkles size={16} />
              </div>
@@ -889,120 +1080,124 @@ export function RevenueEntry() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Section Midi */}
-          <ServiceSection 
-            title="Service du Midi" 
-            icon={<Sun className="text-amber-500" size={24} />}
-            payments={paymentsMidi}
-            setPayments={setPaymentsMidi}
-            activePaymentField={activePaymentField}
-            setActivePaymentField={(field) => setActivePaymentField({ service: 'midi', field })}
-            notes={notesMidi}
-            setNotes={setNotesMidi}
-            attachments={attachmentsMidi}
-            previews={midiPreviews}
-            setAttachments={setAttachmentsMidi}
-            activeMethods={activeMethods}
-            onToggleMethod={handleToggleMethod}
-            total={totalMidi}
-            isActive={isMidiActive}
-            setDate={setDate}
-            onToggleActive={() => {
-              setIsMidiActive(!isMidiActive);
-              if (isMidiActive) {
-                setPaymentsMidi(INITIAL_PAYMENTS);
-                setNotesMidi('');
-                setAttachmentsMidi([]);
-              }
-            }}
-          />
+        {currentStep === 3 && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-300">
+              {/* Section Midi */}
+              <ServiceSection 
+                title="Service du Midi" 
+                icon={<Sun className="text-amber-500" size={24} />}
+                payments={paymentsMidi}
+                setPayments={setPaymentsMidi}
+                activePaymentField={activePaymentField}
+                setActivePaymentField={(field) => setActivePaymentField({ service: 'midi', field })}
+                notes={notesMidi}
+                setNotes={setNotesMidi}
+                attachments={attachmentsMidi}
+                previews={midiPreviews}
+                setAttachments={setAttachmentsMidi}
+                activeMethods={activeMethods}
+                onToggleMethod={handleToggleMethod}
+                total={totalMidi}
+                isActive={isMidiActive}
+                setDate={setDate}
+                onToggleActive={() => {
+                  setIsMidiActive(!isMidiActive);
+                  if (isMidiActive) {
+                    setPaymentsMidi(INITIAL_PAYMENTS);
+                    setNotesMidi('');
+                    setAttachmentsMidi([]);
+                  }
+                }}
+              />
 
-          {/* Section Soir */}
-          <ServiceSection 
-            title="Service du Soir" 
-            icon={<Moon className="text-indigo-500" size={24} />}
-            payments={paymentsSoir}
-            setPayments={setPaymentsSoir}
-            activePaymentField={activePaymentField}
-            setActivePaymentField={(field) => setActivePaymentField({ service: 'soir', field })}
-            notes={notesSoir}
-            setNotes={setNotesSoir}
-            attachments={attachmentsSoir}
-            previews={soirPreviews}
-            setAttachments={setAttachmentsSoir}
-            activeMethods={activeMethods}
-            onToggleMethod={handleToggleMethod}
-            total={totalSoir}
-            isActive={isSoirActive}
-            setDate={setDate}
-            onToggleActive={() => {
-              setIsSoirActive(!isSoirActive);
-              if (isSoirActive) {
-                setPaymentsSoir(INITIAL_PAYMENTS);
-                setNotesSoir('');
-                setAttachmentsSoir([]);
-              }
-            }}
-          />
-        </div>
+              {/* Section Soir */}
+              <ServiceSection 
+                title="Service du Soir" 
+                icon={<Moon className="text-indigo-500" size={24} />}
+                payments={paymentsSoir}
+                setPayments={setPaymentsSoir}
+                activePaymentField={activePaymentField}
+                setActivePaymentField={(field) => setActivePaymentField({ service: 'soir', field })}
+                notes={notesSoir}
+                setNotes={setNotesSoir}
+                attachments={attachmentsSoir}
+                previews={soirPreviews}
+                setAttachments={setAttachmentsSoir}
+                activeMethods={activeMethods}
+                onToggleMethod={handleToggleMethod}
+                total={totalSoir}
+                isActive={isSoirActive}
+                setDate={setDate}
+                onToggleActive={() => {
+                  setIsSoirActive(!isSoirActive);
+                  if (isSoirActive) {
+                    setPaymentsSoir(INITIAL_PAYMENTS);
+                    setNotesSoir('');
+                    setAttachmentsSoir([]);
+                  }
+                }}
+              />
+            </div>
 
-        {/* Footer / Submit */}
-        <div className="sticky bottom-4 bg-white p-6 pb-24 sm:pb-6 sm:pr-24 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/50 flex flex-col sm:flex-row items-center justify-between gap-6 z-10">
-          <div className="w-full sm:w-auto flex-1 max-w-xs">
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Total Journalier</p>
-            <p className="text-3xl font-black text-slate-900 mb-3">
-              {totalJournee.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-            </p>
-            
-            {/* Objectif Progress */}
-            <div className="w-full">
-              <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-1.5">
-                <span>Objectif {dailyGoal.toLocaleString()} €</span>
-                <span className={clsx(
-                  totalJournee >= dailyGoal ? "text-emerald-600" : "text-blue-600"
-                )}>
-                  {Math.min(100, (totalJournee / dailyGoal) * 100).toFixed(0)}%
-                </span>
+            {/* Footer / Submit */}
+            <div className="sticky bottom-4 bg-white p-6 pb-24 sm:pb-6 sm:pr-24 rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/50 flex flex-col sm:flex-row items-center justify-between gap-6 z-10 animate-in fade-in duration-305">
+              <div className="w-full sm:w-auto flex-1 max-w-xs">
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Total Journalier</p>
+                <p className="text-3xl font-black text-slate-900 mb-3">
+                  {totalJournee.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+                </p>
+                
+                {/* Objectif Progress */}
+                <div className="w-full">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-1.5">
+                    <span>Objectif {dailyGoal.toLocaleString()} €</span>
+                    <span className={clsx(
+                      totalJournee >= dailyGoal ? "text-emerald-600" : "text-blue-600"
+                    )}>
+                      {Math.min(100, (totalJournee / dailyGoal) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className={clsx(
+                        "h-full rounded-full transition-all duration-700 ease-out",
+                        totalJournee >= dailyGoal 
+                          ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" 
+                          : "bg-gradient-to-r from-blue-400 to-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+                      )}
+                      style={{ width: `${Math.min((totalJournee / dailyGoal) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                <div 
-                  className={clsx(
-                    "h-full rounded-full transition-all duration-700 ease-out",
-                    totalJournee >= dailyGoal 
-                      ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" 
-                      : "bg-gradient-to-r from-blue-400 to-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+              
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0">
+                {success && (
+                  <span className="flex items-center text-emerald-600 font-semibold text-sm">
+                    <CheckCircle2 className="mr-1" size={18} /> Enregistré
+                  </span>
+                )}
+                {!success && lastSaved && (
+                  <span className="hidden sm:flex items-center text-slate-400 font-medium text-xs">
+                    Brouillon sauvegardé à {format(lastSaved, 'HH:mm')}
+                  </span>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading || !selectedEst || (!isMidiActive && !isSoirActive)}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-blue-600/20"
+                >
+                  {loading ? 'Enregistrement...' : (
+                    <>
+                      <Save size={20} /> Valider la journée
+                    </>
                   )}
-                  style={{ width: `${Math.min((totalJournee / dailyGoal) * 100, 100)}%` }}
-                />
+                </button>
               </div>
             </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0">
-            {success && (
-              <span className="flex items-center text-emerald-600 font-semibold text-sm">
-                <CheckCircle2 className="mr-1" size={18} /> Enregistré
-              </span>
-            )}
-            {!success && lastSaved && (
-              <span className="hidden sm:flex items-center text-slate-400 font-medium text-xs">
-                Brouillon sauvegardé à {format(lastSaved, 'HH:mm')}
-              </span>
-            )}
-            <button
-              type="submit"
-              disabled={loading || !selectedEst || (!isMidiActive && !isSoirActive)}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-blue-600/20"
-            >
-              {loading ? 'Enregistrement...' : (
-                <>
-                  <Save size={20} /> Valider la journée
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+          </>
+        )}
       </form>
 
       {isCalculatorOpen && (
