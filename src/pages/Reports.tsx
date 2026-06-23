@@ -30,6 +30,7 @@ import { Logo } from '../components/Logo';
 import { SearchableSelect } from '../components/SearchableSelect';
 import ReactMarkdown from 'react-markdown';
 import { utils, writeFile } from 'xlsx';
+import { fetchHistoricalWeather, getWeatherIcon } from '../utils/weather';
 
 type Period = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
@@ -302,6 +303,7 @@ export function Reports() {
   const [tableServiceFilter, setTableServiceFilter] = useState<'all' | 'midi' | 'soir'>('all');
   const [tablePaymentTypeFilter, setTablePaymentTypeFilter] = useState<string>('all');
   const [showTableFilters, setShowTableFilters] = useState(false);
+  const [weatherData, setWeatherData] = useState<Record<string, { temp: number, code: number }>>({});
 
   useEffect(() => {
     localStorage.setItem('reportsVisibleColumns', JSON.stringify(visibleColumns));
@@ -490,6 +492,17 @@ export function Reports() {
 
     fetchRevenues();
   }, [userProfile, selectedEst, selectedService, startDate, endDate, establishments, compareMode, appliedCompStartDate, appliedCompEndDate]);
+
+  useEffect(() => {
+    const fetchWeather = async () => {
+      if (!startDate || !endDate) return;
+      const result = await fetchHistoricalWeather(startDate, endDate);
+      if (result.data) {
+        setWeatherData(result.data);
+      }
+    };
+    fetchWeather();
+  }, [startDate, endDate]);
 
   const setQuickRange = (days: number) => {
     setEndDate(format(new Date(), 'yyyy-MM-dd'));
@@ -2378,6 +2391,12 @@ Généré par NordicRevenueS`;
                             <div className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter capitalize py-0.5 px-1.5 bg-slate-100 rounded inline-block mt-1">
                               {rev.service || '-'}
                             </div>
+                            {weatherData[rev.date] && (
+                              <div className="flex items-center gap-1.5 mt-2 text-slate-500 bg-slate-50 px-2 py-1 rounded-lg w-fit border border-slate-100 shadow-sm" title="Météo du jour">
+                                <span className="text-blue-500 flex items-center justify-center">{getWeatherIcon(weatherData[rev.date].code, 14)}</span>
+                                <span className="text-[11px] font-bold">{weatherData[rev.date].temp}°C</span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 px-4 font-semibold text-slate-700">{est?.name || 'Inconnu'}</td>
                           {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600 font-medium">{rev.payments.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
@@ -2395,7 +2414,15 @@ Généré par NordicRevenueS`;
                   ) : (
                     sortedChartData.map((day) => (
                       <tr key={day.date} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4 font-medium text-slate-900">{day.date}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-slate-900">{day.date}</div>
+                          {day.fullDate && weatherData[day.fullDate] && (
+                            <div className="flex items-center gap-1.5 mt-2 text-slate-500 bg-slate-50 px-2 py-1 rounded-lg w-fit border border-slate-100 shadow-sm" title="Météo du jour">
+                              <span className="text-blue-500 flex items-center justify-center">{getWeatherIcon(weatherData[day.fullDate].code, 14)}</span>
+                              <span className="text-[11px] font-bold">{weatherData[day.fullDate].temp}°C</span>
+                            </div>
+                          )}
+                        </td>
                         {visibleColumns.cb && <td className="py-3 px-4 text-right text-slate-600">{day.cb.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         {visibleColumns.cbContactless && <td className="py-3 px-4 text-right text-slate-600">{day.cbContactless.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}
                         {visibleColumns.amex && <td className="py-3 px-4 text-right text-slate-600">{day.amex.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>}

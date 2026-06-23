@@ -43,7 +43,7 @@ async function tryGenerateContent(params: {
   let lastError: any = null;
 
   const defaultModel = params.model || "gemini-3.5-flash";
-  const modelsToTry = [defaultModel, "gemini-3.1-flash-lite"];
+  const modelsToTry = [defaultModel, "gemini-2.5-flash"];
 
   for (const modelName of modelsToTry) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -59,7 +59,8 @@ async function tryGenerateContent(params: {
         lastError = err;
         const errMsg = String(err.message || err).toLowerCase();
         
-        console.warn(`[Gemini Attempt ${attempt}/${maxAttempts} for model ${modelName} failed]:`, errMsg);
+        // Suppress verbose console warnings for expected rate limits and unavailable errors
+        // console.warn(`[Gemini Attempt ${attempt}/${maxAttempts} for model ${modelName} failed]:`, errMsg);
         
         if (
           errMsg.includes("400") || 
@@ -69,7 +70,12 @@ async function tryGenerateContent(params: {
           errMsg.includes("401") || 
           errMsg.includes("403")
         ) {
-          break;
+          break; // Stop retrying on permanent errors
+        }
+
+        // If it's a quota error, we might want to try the fallback model immediately
+        if (errMsg.includes("429") || errMsg.includes("quota exceeded")) {
+          break; // Break the attempt loop to try the next model
         }
 
         if (attempt < maxAttempts) {
